@@ -8,10 +8,10 @@ import * as schema from "./schema";
 import { SETTING_KEYS } from "./schema";
 
 const BROTH_TYPES = [
-  { name: "Chicken Broth", sortOrder: 1 },
-  { name: "Spicy Chicken Broth", sortOrder: 2 },
-  { name: "Beef Broth", sortOrder: 3 },
-  { name: "Spicy Beef Broth", sortOrder: 4 },
+  { name: "Caldo de Pollo", sortOrder: 1 },
+  { name: "Caldo de Pollo Picante", sortOrder: 2 },
+  { name: "Caldo de Carne", sortOrder: 3 },
+  { name: "Caldo de Carne Picante", sortOrder: 4 },
 ];
 
 const DELIVERY_SLOTS = [

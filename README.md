@@ -106,7 +106,7 @@ npm run db:reset      # DROP + recreate public schema (dev only) — then migrat
 ```
 
 ### Seed data
-- **Broth types:** Chicken, Spicy Chicken, Beef, Spicy Beef
+- **Broth types:** Caldo de Pollo, Caldo de Pollo Picante, Caldo de Carne, Caldo de Carne Picante
 - **Delivery slots:** 21–22, 22–23, 23–00, 00–01 (capacity 6 each)
 - **Settings:** daily capacity 24, slot capacity 6, active day = `friday`
 
