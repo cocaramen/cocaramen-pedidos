@@ -62,7 +62,8 @@ export function OrderForm({ brothTypes, slots, defaultDate, initial }: Props) {
   const [pending, startTransition] = useTransition();
 
   const [customerName, setCustomerName] = useState(initial?.customerName ?? "");
-  const [customerPhone, setCustomerPhone] = useState(initial?.customerPhone ?? "");
+  // New orders default to the Argentina country code (+54); edited orders keep theirs.
+  const [customerPhone, setCustomerPhone] = useState(initial?.customerPhone ?? "+54 ");
   const [customerAddress, setCustomerAddress] = useState(initial?.customerAddress ?? "");
   const [customerNotes, setCustomerNotes] = useState(initial?.customerNotes ?? "");
   const [internalNotes, setInternalNotes] = useState(initial?.internalNotes ?? "");
@@ -191,7 +192,7 @@ export function OrderForm({ brothTypes, slots, defaultDate, initial }: Props) {
               <Input
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
-                placeholder="+34 600 000 000"
+                placeholder="+54 9 11 1234 5678"
                 inputMode="tel"
               />
             </Field>
