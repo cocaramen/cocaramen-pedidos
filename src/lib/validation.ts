@@ -95,3 +95,16 @@ export const DELIVERY_DAYS = [
 export const deliveryDaysSchema = z.object({
   activeDeliveryDays: z.array(z.enum(DELIVERY_DAYS)).min(0),
 });
+
+export const originSchema = z.object({
+  originAddress: z.string().trim().max(500).optional().or(z.literal("")),
+  originLat: z.number().min(-90).max(90).nullish(),
+  originLng: z.number().min(-180).max(180).nullish(),
+});
+
+export const searchAreaSchema = z.object({
+  searchLabel: z.string().trim().min(1, "El nombre es obligatorio.").max(120),
+  searchCenterLat: z.number().min(-90).max(90),
+  searchCenterLng: z.number().min(-180).max(180),
+  searchRadiusKm: z.coerce.number().min(1, "Mínimo 1 km.").max(200, "Máximo 200 km."),
+});

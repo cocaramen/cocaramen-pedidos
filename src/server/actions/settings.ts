@@ -11,6 +11,8 @@ import {
   capacitySettingsSchema,
   deliveryDaysSchema,
   deliverySlotSchema,
+  originSchema,
+  searchAreaSchema,
 } from "@/lib/validation";
 import { type ActionResult, ok, fail } from "@/lib/action-result";
 import { requireUser } from "@/lib/auth/session";
@@ -20,6 +22,42 @@ function revalidateSettings() {
   revalidatePath("/");
   revalidatePath("/orders");
   revalidatePath("/orders/new");
+  revalidatePath("/routes");
+}
+
+// ── Delivery origin (kitchen) ──────────────────────────────────
+export async function updateDeliveryOrigin(input: unknown): Promise<ActionResult> {
+  await requireUser();
+  const parsed = originSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Datos inválidos.", { fieldErrors: parsed.error.flatten().fieldErrors });
+  }
+  await setSetting(SETTING_KEYS.ORIGIN_ADDRESS, parsed.data.originAddress ?? "");
+  await setSetting(
+    SETTING_KEYS.ORIGIN_LAT,
+    parsed.data.originLat != null ? String(parsed.data.originLat) : "",
+  );
+  await setSetting(
+    SETTING_KEYS.ORIGIN_LNG,
+    parsed.data.originLng != null ? String(parsed.data.originLng) : "",
+  );
+  revalidateSettings();
+  return ok(undefined);
+}
+
+// ── Address search area (order form autocomplete) ──────────────
+export async function updateSearchArea(input: unknown): Promise<ActionResult> {
+  await requireUser();
+  const parsed = searchAreaSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Datos inválidos.", { fieldErrors: parsed.error.flatten().fieldErrors });
+  }
+  await setSetting(SETTING_KEYS.SEARCH_LABEL, parsed.data.searchLabel);
+  await setSetting(SETTING_KEYS.SEARCH_CENTER_LAT, String(parsed.data.searchCenterLat));
+  await setSetting(SETTING_KEYS.SEARCH_CENTER_LNG, String(parsed.data.searchCenterLng));
+  await setSetting(SETTING_KEYS.SEARCH_RADIUS_KM, String(parsed.data.searchRadiusKm));
+  revalidateSettings();
+  return ok(undefined);
 }
 
 // ── Capacity ───────────────────────────────────────────────────

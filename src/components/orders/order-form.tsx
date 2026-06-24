@@ -28,7 +28,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CapacityMeter } from "@/components/capacity-meter";
-import { AddressPicker } from "@/components/orders/address-picker";
+import { AddressPicker, type SearchArea } from "@/components/orders/address-picker";
 import { cn } from "@/lib/utils";
 import type { BrothType, DeliverySlot, OrderStatus } from "@/db/schema";
 import type { CapacityEvaluation } from "@/lib/capacity";
@@ -57,9 +57,10 @@ interface Props {
   slots: DeliverySlot[];
   defaultDate: string;
   initial?: OrderFormInitial;
+  searchArea?: SearchArea | null;
 }
 
-export function OrderForm({ brothTypes, slots, defaultDate, initial }: Props) {
+export function OrderForm({ brothTypes, slots, defaultDate, initial, searchArea }: Props) {
   const router = useRouter();
   const isEdit = Boolean(initial);
   const [pending, startTransition] = useTransition();
@@ -214,6 +215,7 @@ export function OrderForm({ brothTypes, slots, defaultDate, initial }: Props) {
                   setLongitude(lo);
                 }}
                 error={err("customerAddress")}
+                searchArea={searchArea}
               />
             </Field>
             <Field label="Observaciones del cliente" className="sm:col-span-2">

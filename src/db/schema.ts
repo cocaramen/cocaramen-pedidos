@@ -196,6 +196,13 @@ export const SETTING_KEYS = {
   DEFAULT_SLOT_CAPACITY: "default_slot_capacity",
   DEFAULT_DAILY_CAPACITY: "default_daily_capacity",
   ACTIVE_DELIVERY_DAYS: "active_delivery_days",
+  ORIGIN_ADDRESS: "origin_address",
+  ORIGIN_LAT: "origin_lat",
+  ORIGIN_LNG: "origin_lng",
+  SEARCH_LABEL: "search_label",
+  SEARCH_CENTER_LAT: "search_center_lat",
+  SEARCH_CENTER_LNG: "search_center_lng",
+  SEARCH_RADIUS_KM: "search_radius_km",
 } as const;
 
 // raw sql re-export for convenience in migrations/seeds

@@ -63,6 +63,12 @@ export default async function EditOrderPage({
         slots={[...slotMap.values()]}
         defaultDate={nextDeliveryDate(settings.activeDeliveryDays)}
         initial={initial}
+        searchArea={{
+          lat: settings.searchCenterLat,
+          lng: settings.searchCenterLng,
+          radiusKm: settings.searchRadiusKm,
+          label: settings.searchLabel,
+        }}
       />
     </div>
   );

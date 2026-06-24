@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/db";
 import { orders, orderItems, deliverySlots, brothTypes } from "@/db/schema";
-import { and, asc, desc, eq, ilike, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, ne, or, sql, type SQL } from "drizzle-orm";
 import { getSettings } from "./settings";
 import type { OrderStatus } from "@/db/schema";
 
@@ -85,6 +85,32 @@ export async function listOrders(filters: OrderListFilters) {
       items: { with: { brothType: true } },
     },
     limit: 500,
+  });
+}
+
+// ── Routing ────────────────────────────────────────────────────
+/** Statuses that still need to be delivered (so they belong on a route). */
+const ROUTABLE_STATUSES: OrderStatus[] = [
+  "pending",
+  "confirmed",
+  "preparing",
+  "out_for_delivery",
+];
+
+/** Orders for a date + slot set that still need delivery (incl. those without coords). */
+export async function getOrdersForRouting(date: string, slotIds: string[]) {
+  const conditions: SQL[] = [
+    eq(orders.deliveryDate, date),
+    inArray(orders.status, ROUTABLE_STATUSES),
+  ];
+  if (slotIds.length) {
+    const clause = inArray(orders.deliverySlotId, slotIds);
+    if (clause) conditions.push(clause);
+  }
+  return db.query.orders.findMany({
+    where: and(...conditions),
+    with: { slot: true },
+    orderBy: [asc(orders.createdAt)],
   });
 }
 

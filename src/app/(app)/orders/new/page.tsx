@@ -20,7 +20,17 @@ export default async function NewOrderPage() {
         title="Nuevo Pedido"
         description="Registre un pedido y revise la capacidad antes de confirmar."
       />
-      <OrderForm brothTypes={brothTypes} slots={slots} defaultDate={defaultDate} />
+      <OrderForm
+        brothTypes={brothTypes}
+        slots={slots}
+        defaultDate={defaultDate}
+        searchArea={{
+          lat: settings.searchCenterLat,
+          lng: settings.searchCenterLng,
+          radiusKm: settings.searchRadiusKm,
+          label: settings.searchLabel,
+        }}
+      />
     </div>
   );
 }

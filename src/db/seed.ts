@@ -25,6 +25,15 @@ const SETTINGS = [
   { key: SETTING_KEYS.DEFAULT_SLOT_CAPACITY, value: "6" },
   { key: SETTING_KEYS.DEFAULT_DAILY_CAPACITY, value: "24" },
   { key: SETTING_KEYS.ACTIVE_DELIVERY_DAYS, value: "friday" },
+  // Delivery origin (kitchen) — editable in Settings.
+  { key: SETTING_KEYS.ORIGIN_ADDRESS, value: "Avenida Mate de Luna 2214, San Miguel de Tucumán, Tucumán" },
+  { key: SETTING_KEYS.ORIGIN_LAT, value: "-26.82548" },
+  { key: SETTING_KEYS.ORIGIN_LNG, value: "-65.23091" },
+  // Address-autocomplete search area (order form).
+  { key: SETTING_KEYS.SEARCH_LABEL, value: "San Miguel de Tucumán" },
+  { key: SETTING_KEYS.SEARCH_CENTER_LAT, value: "-26.8333" },
+  { key: SETTING_KEYS.SEARCH_CENTER_LNG, value: "-65.2167" },
+  { key: SETTING_KEYS.SEARCH_RADIUS_KM, value: "10" },
 ];
 
 async function main() {

@@ -8,6 +8,8 @@ import { CapacityForm } from "@/components/settings/capacity-form";
 import { DeliveryDaysForm } from "@/components/settings/delivery-days-form";
 import { BrothTypesManager } from "@/components/settings/broth-types-manager";
 import { SlotsManager } from "@/components/settings/slots-manager";
+import { OriginForm } from "@/components/settings/origin-form";
+import { SearchAreaForm } from "@/components/settings/search-area-form";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,8 @@ export default async function SettingsPage() {
           <TabsTrigger value="delivery-days">Días de entrega</TabsTrigger>
           <TabsTrigger value="broth-types">Tipos de caldo</TabsTrigger>
           <TabsTrigger value="slots">Franjas horarias</TabsTrigger>
+          <TabsTrigger value="origin">Origen de reparto</TabsTrigger>
+          <TabsTrigger value="search-area">Área de búsqueda</TabsTrigger>
         </TabsList>
 
         <TabsContent value="capacity">
@@ -50,6 +54,23 @@ export default async function SettingsPage() {
 
         <TabsContent value="slots">
           <SlotsManager slots={slots} />
+        </TabsContent>
+
+        <TabsContent value="origin">
+          <OriginForm
+            originAddress={settings.originAddress}
+            originLat={settings.originLat}
+            originLng={settings.originLng}
+          />
+        </TabsContent>
+
+        <TabsContent value="search-area">
+          <SearchAreaForm
+            searchLabel={settings.searchLabel}
+            searchCenterLat={settings.searchCenterLat}
+            searchCenterLng={settings.searchCenterLng}
+            searchRadiusKm={settings.searchRadiusKm}
+          />
         </TabsContent>
       </Tabs>
     </div>

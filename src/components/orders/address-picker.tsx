@@ -5,32 +5,20 @@ import { useEffect, useRef, useState } from "react";
 import type * as LType from "leaflet";
 import { Input } from "@/components/ui/input";
 import { Loader2, MapPin, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import {
+  searchAddresses,
+  reverseGeocode as reverseGeocodeAction,
+  type GeoSuggestion,
+} from "@/server/actions/geocode";
 
-// Buenos Aires as the default map center / search bias.
+// Argentina center — fallback map view when no search area is configured.
 const AR_CENTER: [number, number] = [-34.6037, -58.3816];
 
-interface PhotonProps {
-  name?: string;
-  housenumber?: string;
-  street?: string;
-  postcode?: string;
-  city?: string;
-  district?: string;
-  county?: string;
-  state?: string;
-  country?: string;
-  countrycode?: string;
-}
-interface PhotonFeature {
-  geometry: { coordinates: [number, number] }; // [lon, lat]
-  properties: PhotonProps;
-}
-
-function labelFromProps(p: PhotonProps): string {
-  const streetPart = [p.street ?? p.name, p.housenumber].filter(Boolean).join(" ");
-  const locality = p.city ?? p.district ?? p.county;
-  return [streetPart || p.name, locality, p.state].filter(Boolean).join(", ");
+export interface SearchArea {
+  lat: number;
+  lng: number;
+  radiusKm: number;
+  label?: string;
 }
 
 interface Props {
@@ -40,6 +28,8 @@ interface Props {
   lng: number | null;
   onCoordsChange: (lat: number | null, lng: number | null) => void;
   error?: string;
+  /** Restrict suggestions to within radiusKm of this center. */
+  searchArea?: SearchArea | null;
 }
 
 export function AddressPicker({
@@ -49,17 +39,18 @@ export function AddressPicker({
   lng,
   onCoordsChange,
   error,
+  searchArea,
 }: Props) {
+  const center: [number, number] = searchArea ? [searchArea.lat, searchArea.lng] : AR_CENTER;
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LType.Map | null>(null);
   const markerRef = useRef<LType.Marker | null>(null);
-  const leafletRef = useRef<typeof LType | null>(null);
 
-  const [suggestions, setSuggestions] = useState<PhotonFeature[]>([]);
+  const [suggestions, setSuggestions] = useState<GeoSuggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const abortRef = useRef<AbortController | null>(null);
+  const reqRef = useRef(0);
 
   // ── Initialise the Leaflet map once (client-only) ──────────────
   useEffect(() => {
@@ -67,7 +58,6 @@ export function AddressPicker({
     (async () => {
       const L = (await import("leaflet")).default;
       if (cancelled || !mapEl.current || mapRef.current) return;
-      leafletRef.current = L;
 
       const icon = L.icon({
         iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -79,30 +69,29 @@ export function AddressPicker({
         shadowSize: [41, 41],
       });
 
-      const start: [number, number] = lat != null && lng != null ? [lat, lng] : AR_CENTER;
-      const map = L.map(mapEl.current).setView(start, lat != null ? 16 : 11);
+      const start: [number, number] = lat != null && lng != null ? [lat, lng] : center;
+      const map = L.map(mapEl.current).setView(start, lat != null ? 16 : searchArea ? 13 : 11);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap",
         maxZoom: 19,
       }).addTo(map);
 
       const marker = L.marker(start, { draggable: true, icon }).addTo(map);
-      if (lat == null) marker.setOpacity(0); // hidden until a location is chosen
+      if (lat == null) marker.setOpacity(0);
 
       marker.on("dragend", () => {
         const { lat: la, lng: lo } = marker.getLatLng();
         onCoordsChange(la, lo);
-        reverseGeocode(la, lo);
+        void fillFromReverse(la, lo);
       });
       map.on("click", (e: LType.LeafletMouseEvent) => {
         marker.setLatLng(e.latlng).setOpacity(1);
         onCoordsChange(e.latlng.lat, e.latlng.lng);
-        reverseGeocode(e.latlng.lat, e.latlng.lng);
+        void fillFromReverse(e.latlng.lat, e.latlng.lng);
       });
 
       mapRef.current = map;
       markerRef.current = marker;
-      // Leaflet needs a size recalc after mount inside flex/grid layouts.
       setTimeout(() => map.invalidateSize(), 0);
     })();
     return () => {
@@ -124,63 +113,45 @@ export function AddressPicker({
     }
   }
 
-  // ── Photon autocomplete (Argentina-only) ───────────────────────
+  // ── Autocomplete (server-proxied: Geoapify w/ Photon fallback) ──
   function search(q: string) {
     clearTimeout(debounceRef.current);
-    if (q.trim().length < 4) {
+    if (q.trim().length < 3) {
       setSuggestions([]);
       setOpen(false);
       return;
     }
     debounceRef.current = setTimeout(async () => {
-      abortRef.current?.abort();
-      const ctrl = new AbortController();
-      abortRef.current = ctrl;
+      const reqId = ++reqRef.current;
       setLoading(true);
       try {
-        // Photon's public API only supports lang default/de/en/fr — omitting
-        // `lang` returns local (Spanish) names for Argentine places.
-        const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(
-          q,
-        )}&limit=8&lat=${AR_CENTER[0]}&lon=${AR_CENTER[1]}`;
-        const res = await fetch(url, { signal: ctrl.signal });
-        const data = (await res.json()) as { features: PhotonFeature[] };
-        const arOnly = (data.features ?? []).filter(
-          (f) => f.properties.countrycode === "AR",
-        );
-        setSuggestions(arOnly);
-        setOpen(arOnly.length > 0);
+        const results = await searchAddresses(q, searchArea ?? null);
+        if (reqId !== reqRef.current) return; // stale response
+        setSuggestions(results);
+        setOpen(results.length > 0);
       } catch {
-        /* aborted or network error — ignore */
+        /* ignore */
       } finally {
-        setLoading(false);
+        if (reqId === reqRef.current) setLoading(false);
       }
     }, 350);
   }
 
-  async function reverseGeocode(la: number, lo: number) {
-    try {
-      const res = await fetch(`https://photon.komoot.io/reverse?lat=${la}&lon=${lo}`);
-      const data = (await res.json()) as { features: PhotonFeature[] };
-      const f = data.features?.[0];
-      if (f) onAddressChange(labelFromProps(f.properties));
-    } catch {
-      /* ignore */
-    }
+  async function fillFromReverse(la: number, lo: number) {
+    const label = await reverseGeocodeAction(la, lo);
+    if (label) onAddressChange(label);
   }
 
-  function pick(f: PhotonFeature) {
-    const [lo, la] = f.geometry.coordinates;
-    onAddressChange(labelFromProps(f.properties));
-    movePin(la, lo);
+  function pick(s: GeoSuggestion) {
+    onAddressChange(s.label);
+    movePin(s.lat, s.lng);
     setOpen(false);
     setSuggestions([]);
   }
 
   function clearPin() {
     onCoordsChange(null, null);
-    const marker = markerRef.current;
-    marker?.setOpacity(0);
+    markerRef.current?.setOpacity(0);
   }
 
   return (
@@ -196,7 +167,11 @@ export function AddressPicker({
             }}
             onFocus={() => suggestions.length && setOpen(true)}
             onBlur={() => setTimeout(() => setOpen(false), 150)}
-            placeholder="Buscar dirección (calle y altura, localidad)…"
+            placeholder={
+              searchArea?.label
+                ? `Buscar dirección en ${searchArea.label}…`
+                : "Buscar dirección (calle y altura, localidad)…"
+            }
             className="pl-9"
             autoComplete="off"
           />
@@ -206,16 +181,16 @@ export function AddressPicker({
         </div>
         {open && suggestions.length > 0 && (
           <ul className="absolute z-[1000] mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover p-1 shadow-md">
-            {suggestions.map((f, i) => (
+            {suggestions.map((s, i) => (
               <li key={i}>
                 <button
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => pick(f)}
+                  onClick={() => pick(s)}
                   className="flex w-full items-start gap-2 rounded-sm px-2 py-2 text-left text-sm hover:bg-accent"
                 >
                   <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span>{labelFromProps(f.properties)}</span>
+                  <span>{s.label}</span>
                 </button>
               </li>
             ))}
