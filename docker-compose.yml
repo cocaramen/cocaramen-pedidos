@@ -1,0 +1,68 @@
+services:
+  # ────────────────────────────────────────────────────────────
+  # PostgreSQL — local development database
+  # ────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: cocaramen-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ramen
+      POSTGRES_PASSWORD: ramen
+      POSTGRES_DB: cocaramen
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ramen -d cocaramen"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ────────────────────────────────────────────────────────────
+  # Application — Next.js (migrates + seeds + dev server on boot)
+  # ────────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: cocaramen-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Inside the compose network the DB host is "db", not "localhost".
+      DATABASE_URL: postgresql://ramen:ramen@db:5432/cocaramen
+      AUTH_MODE: ${AUTH_MODE:-dev}
+      DEV_AUTH_USERS: ${DEV_AUTH_USERS:-operator@cocaramen.local:ramen1234,chef@cocaramen.local:ramen1234}
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      NODE_ENV: development
+      WATCHPACK_POLLING: "true"
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+
+  # ────────────────────────────────────────────────────────────
+  # Adminer — lightweight DB admin UI (optional)
+  # ────────────────────────────────────────────────────────────
+  adminer:
+    image: adminer:latest
+    container_name: cocaramen-adminer
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "${ADMINER_PORT:-8080}:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+      ADMINER_DESIGN: dracula
+
+volumes:
+  postgres-data:

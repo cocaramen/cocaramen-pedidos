@@ -1,0 +1,44 @@
+# CI quality gate. DORMANT until a GitHub repo is connected (the project has no
+# Git/GitHub yet — see ROADMAP "Control de versiones"). When you push this repo
+# to GitHub, this runs automatically on every push/PR.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    name: Lint · Typecheck · Tests
+    runs-on: ubuntu-latest
+
+    # Postgres service so DB integration tests can run too.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ramen
+          POSTGRES_PASSWORD: ramen
+          POSTGRES_DB: cocaramen
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ramen -d cocaramen"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://ramen:ramen@localhost:5432/cocaramen
+      AUTH_MODE: dev
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run migrate && npm run test:integration

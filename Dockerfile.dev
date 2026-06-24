@@ -1,0 +1,19 @@
+# Development image: installs deps, runs migrations + seed, then `next dev`.
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Needed by some native deps / wait scripts
+RUN apk add --no-cache bash postgresql-client
+
+# Install dependencies first (cached layer)
+COPY package.json package-lock.json* ./
+RUN npm install
+
+# Copy the rest of the source (overridden by the bind mount at runtime)
+COPY . .
+
+EXPOSE 3000
+
+# Entrypoint: wait for DB, migrate, seed, then start dev server.
+CMD ["bash", "docker/entrypoint.dev.sh"]

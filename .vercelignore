@@ -1,0 +1,11 @@
+.env
+.env*.local
+node_modules
+.next
+postgres-data
+coverage
+.git
+docker-compose.yml
+Dockerfile
+Dockerfile.dev
+docker
