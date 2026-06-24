@@ -17,12 +17,17 @@ const globalForDb = globalThis as unknown as {
 };
 
 // `prepare: false` keeps things compatible with the Supabase transaction
-// pooler (PgBouncer) used in production. Locally it is harmless.
+// pooler (PgBouncer) used in production.
+//
+// `max` must be > 1: postgres-js pipelines concurrent queries onto a single
+// connection, which DEADLOCKS on Supabase's transaction pooler (it doesn't
+// support pipelining). A small pool lets `Promise.all([...])` queries run on
+// separate connections. With max:1 pages like /settings hang forever.
 const client =
   globalForDb.__ramenClient ??
   postgres(connectionString, {
     prepare: false,
-    max: process.env.NODE_ENV === "production" ? 1 : 10,
+    max: 10,
   });
 
 if (process.env.NODE_ENV !== "production") {
