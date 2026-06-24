@@ -4,18 +4,21 @@ import { useState } from "react";
 import Link from "next/link";
 import { Nav } from "./nav";
 import { UserMenu } from "./user-menu";
+import { SocialLinks } from "./social-links";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Menu, X, Soup } from "lucide-react";
+import { Menu, X } from "lucide-react";
+import Image from "next/image";
+import { APP_NAME, APP_NAME_SHORT } from "@/lib/app";
 
 function Brand() {
   return (
     <Link href="/" className="flex items-center gap-2 px-5 py-5">
-      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-        <Soup className="h-5 w-5" />
+      <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full">
+        <Image src="/logo.png" alt={APP_NAME} fill sizes="36px" className="object-cover" />
       </span>
       <div className="leading-tight">
-        <div className="text-base font-bold tracking-tight">Cocaramen</div>
+        <div className="text-sm font-bold leading-snug tracking-tight">{APP_NAME}</div>
         <div className="text-xs text-muted-foreground">Gestión de pedidos</div>
       </div>
     </Link>
@@ -39,8 +42,9 @@ export function AppShell({
         <div className="flex-1 py-2">
           <Nav />
         </div>
-        <div className="border-t p-3 text-xs text-muted-foreground">
-          Sistema interno · 2 operadores
+        <div className="space-y-2 border-t p-3">
+          <SocialLinks />
+          <p className="text-xs text-muted-foreground">Sistema interno · 2 operadores</p>
         </div>
       </aside>
 
@@ -68,6 +72,9 @@ export function AppShell({
             <div className="flex-1 py-2" onClick={() => setOpen(false)}>
               <Nav />
             </div>
+            <div className="border-t p-3">
+              <SocialLinks />
+            </div>
           </aside>
         </div>
       )}
@@ -88,7 +95,7 @@ export function AppShell({
             >
               <Menu className="h-5 w-5" />
             </Button>
-            <span className="font-semibold lg:hidden">Cocaramen</span>
+            <span className="truncate font-semibold lg:hidden">{APP_NAME_SHORT}</span>
           </div>
           <UserMenu email={email} />
         </header>

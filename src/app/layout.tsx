@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { APP_NAME } from "@/lib/app";
 
 export const metadata: Metadata = {
-  title: "Cocaramen · Gestión de Pedidos",
+  title: `${APP_NAME} · Gestión de Pedidos`,
   description: "Sistema interno de gestión de pedidos de ramen",
 };
 

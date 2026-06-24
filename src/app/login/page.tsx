@@ -3,7 +3,8 @@ import { getUser } from "@/lib/auth/session";
 import { authMode, devUsers } from "@/lib/auth/config";
 import { LoginForm } from "./login-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Soup } from "lucide-react";
+import Image from "next/image";
+import { APP_NAME } from "@/lib/app";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +19,10 @@ export default async function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-orange-50 to-amber-100 p-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Soup className="h-6 w-6" />
+          <span className="relative h-24 w-24 overflow-hidden rounded-full shadow-md">
+            <Image src="/logo.png" alt={APP_NAME} fill sizes="96px" className="object-cover" priority />
           </span>
-          <h1 className="text-2xl font-bold tracking-tight">Cocaramen</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{APP_NAME}</h1>
           <p className="text-sm text-muted-foreground">Gestión interna de pedidos</p>
         </div>
         <Card className="shadow-lg">
