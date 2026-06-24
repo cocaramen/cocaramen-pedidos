@@ -44,7 +44,7 @@ _Última actualización: 2026-06-23_
 
 ## 🧱 Deuda técnica / endurecer para uso real
 - [ ] **Rotar** Database Password + API keys de Supabase (pasaron por el chat) y actualizar env en Vercel.
-- [ ] **Control de versiones (Git)** — hoy NO hay; sin historial ni rollback.
+- [x] **Control de versiones (Git)** — repo en github.com/cocaramen/cocaramen-pedidos (vía alias SSH dedicado).
 - [ ] **Dominio propio** (ej. `pedidos.tudominio.com`) + plan Vercel **Pro** (uso comercial).
 - [ ] Confirmación de borrado ya existe; revisar manejo de errores de red en acciones.
 - [ ] Backups/auto-pausa de Supabase (free tier pausa por inactividad).
