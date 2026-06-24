@@ -15,6 +15,9 @@ exceeding it warns and sets override flags, but NEVER blocks saving.
 docker compose up -d                      # → http://localhost:3000
 # Ports busy on this machine? (jiracopy uses 5432/3000)
 DB_PORT=5433 APP_PORT=3007 docker compose up -d
+# After adding an npm dependency, the dev CONTAINER has its own node_modules
+# volume — restart it so the entrypoint reinstalls: docker restart cocaramen-app
+# (or `docker compose up -d --build`). Otherwise: "Module not found".
 
 # Without Docker
 npm run dev                               # needs Postgres + DATABASE_URL

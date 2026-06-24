@@ -28,6 +28,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CapacityMeter } from "@/components/capacity-meter";
+import { AddressPicker } from "@/components/orders/address-picker";
 import { cn } from "@/lib/utils";
 import type { BrothType, DeliverySlot, OrderStatus } from "@/db/schema";
 import type { CapacityEvaluation } from "@/lib/capacity";
@@ -41,6 +42,8 @@ export interface OrderFormInitial {
   customerName: string;
   customerPhone: string;
   customerAddress: string;
+  latitude: number | null;
+  longitude: number | null;
   customerNotes: string | null;
   internalNotes: string | null;
   deliveryDate: string;
@@ -65,6 +68,8 @@ export function OrderForm({ brothTypes, slots, defaultDate, initial }: Props) {
   // New orders default to the Argentina country code (+54); edited orders keep theirs.
   const [customerPhone, setCustomerPhone] = useState(initial?.customerPhone ?? "+54 ");
   const [customerAddress, setCustomerAddress] = useState(initial?.customerAddress ?? "");
+  const [latitude, setLatitude] = useState<number | null>(initial?.latitude ?? null);
+  const [longitude, setLongitude] = useState<number | null>(initial?.longitude ?? null);
   const [customerNotes, setCustomerNotes] = useState(initial?.customerNotes ?? "");
   const [internalNotes, setInternalNotes] = useState(initial?.internalNotes ?? "");
   const [deliveryDate, setDeliveryDate] = useState(initial?.deliveryDate ?? defaultDate);
@@ -128,6 +133,8 @@ export function OrderForm({ brothTypes, slots, defaultDate, initial }: Props) {
       customerName,
       customerPhone,
       customerAddress,
+      latitude,
+      longitude,
       customerNotes,
       internalNotes,
       deliveryDate,
@@ -196,17 +203,17 @@ export function OrderForm({ brothTypes, slots, defaultDate, initial }: Props) {
                 inputMode="tel"
               />
             </Field>
-            <Field
-              label="Dirección de entrega"
-              error={err("customerAddress")}
-              required
-              className="sm:col-span-2"
-            >
-              <Textarea
-                value={customerAddress}
-                onChange={(e) => setCustomerAddress(e.target.value)}
-                placeholder="Calle, número, piso, ciudad"
-                rows={2}
+            <Field label="Dirección de entrega" required className="sm:col-span-2">
+              <AddressPicker
+                address={customerAddress}
+                onAddressChange={setCustomerAddress}
+                lat={latitude}
+                lng={longitude}
+                onCoordsChange={(la, lo) => {
+                  setLatitude(la);
+                  setLongitude(lo);
+                }}
+                error={err("customerAddress")}
               />
             </Field>
             <Field label="Observaciones del cliente" className="sm:col-span-2">

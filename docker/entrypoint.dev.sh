@@ -7,11 +7,11 @@ until pg_isready -d "${DATABASE_URL}" >/dev/null 2>&1; do
 done
 echo "✅ PostgreSQL is ready."
 
-# Ensure node_modules exists when the project is bind-mounted.
-if [ ! -d "node_modules/next" ]; then
-  echo "📦 Installing dependencies (bind mount detected)..."
-  npm install
-fi
+# Keep the container's node_modules in sync with package.json on every start.
+# npm is a near no-op when nothing changed, and this prevents "module not found"
+# after a dependency is added on the host (the container has its own volume).
+echo "📦 Ensuring dependencies are in sync..."
+npm install --no-audit --no-fund
 
 echo "🗄️  Running migrations..."
 npm run migrate

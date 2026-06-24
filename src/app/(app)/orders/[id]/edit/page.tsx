@@ -40,6 +40,8 @@ export default async function EditOrderPage({
     customerName: order.customerName,
     customerPhone: order.customerPhone,
     customerAddress: order.customerAddress,
+    latitude: order.latitude,
+    longitude: order.longitude,
     customerNotes: order.customerNotes,
     internalNotes: order.internalNotes,
     deliveryDate: order.deliveryDate,

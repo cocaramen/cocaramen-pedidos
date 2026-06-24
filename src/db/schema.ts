@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   boolean,
   date,
+  doublePrecision,
   integer,
   pgEnum,
   pgTable,
@@ -100,6 +101,9 @@ export const orders = pgTable(
     customerName: text("customer_name").notNull(),
     customerPhone: text("customer_phone").notNull(),
     customerAddress: text("customer_address").notNull(),
+    // Optional geocoded pin (Argentina-only address autocomplete + map).
+    latitude: doublePrecision("latitude"),
+    longitude: doublePrecision("longitude"),
     customerNotes: text("customer_notes"),
     internalNotes: text("internal_notes"),
     deliveryDate: date("delivery_date").notNull(),

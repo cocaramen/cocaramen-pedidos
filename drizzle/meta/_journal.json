@@ -8,6 +8,13 @@
       "when": 1782250768842,
       "tag": "0000_living_blizzard",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782268188204,
+      "tag": "0001_rare_mordo",
+      "breakpoints": true
     }
   ]
 }

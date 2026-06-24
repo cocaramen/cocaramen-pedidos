@@ -20,6 +20,8 @@ export const orderBaseSchema = z.object({
     .min(1, "El teléfono es obligatorio.")
     .regex(phoneRegex, "Teléfono inválido."),
   customerAddress: z.string().trim().min(1, "La dirección es obligatoria.").max(500),
+  latitude: z.number().min(-90).max(90).nullish(),
+  longitude: z.number().min(-180).max(180).nullish(),
   customerNotes: z.string().trim().max(2000).optional().or(z.literal("")),
   internalNotes: z.string().trim().max(2000).optional().or(z.literal("")),
   deliveryDate: z
