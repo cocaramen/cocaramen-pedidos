@@ -66,6 +66,25 @@ export function nextDeliveryDate(activeDays: string[], now: Date = new Date()): 
   return todayISO(now);
 }
 
+/** The next `count` dates (incl. today) matching the active delivery weekdays. */
+export function upcomingDeliveryDates(
+  activeDays: string[],
+  count = 4,
+  now: Date = new Date(),
+): string[] {
+  const targets = activeDays
+    .map((d) => WEEKDAY_INDEX[d])
+    .filter((n): n is number => n !== undefined);
+  if (!targets.length) return [];
+  const out: string[] = [];
+  for (let offset = 0; offset < 90 && out.length < count; offset++) {
+    const c = new Date(now);
+    c.setDate(now.getDate() + offset);
+    if (targets.includes(c.getDay())) out.push(format(c, "yyyy-MM-dd"));
+  }
+  return out;
+}
+
 /** "21:00:00" -> "21:00" */
 export function trimTime(t: string): string {
   return t.slice(0, 5);

@@ -22,14 +22,23 @@ import { updateCapacitySettings } from "@/server/actions/settings";
 interface Props {
   defaultDailyCapacity: number;
   defaultSlotCapacity: number;
+  maxSlotCapacity: number;
+  maxDailyCapacity: number;
 }
 
-export function CapacityForm({ defaultDailyCapacity, defaultSlotCapacity }: Props) {
+export function CapacityForm({
+  defaultDailyCapacity,
+  defaultSlotCapacity,
+  maxSlotCapacity,
+  maxDailyCapacity,
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   const [dailyCapacity, setDailyCapacity] = useState(String(defaultDailyCapacity));
   const [slotCapacity, setSlotCapacity] = useState(String(defaultSlotCapacity));
+  const [maxSlot, setMaxSlot] = useState(String(maxSlotCapacity));
+  const [maxDaily, setMaxDaily] = useState(String(maxDailyCapacity));
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
 
   function onSubmit(e: React.FormEvent) {
@@ -39,6 +48,8 @@ export function CapacityForm({ defaultDailyCapacity, defaultSlotCapacity }: Prop
       const result = await updateCapacitySettings({
         defaultDailyCapacity: Number(dailyCapacity),
         defaultSlotCapacity: Number(slotCapacity),
+        maxSlotCapacity: Number(maxSlot),
+        maxDailyCapacity: Number(maxDaily),
       });
       if (result.ok) {
         toast.success("Capacidad actualizada");
@@ -105,11 +116,48 @@ export function CapacityForm({ defaultDailyCapacity, defaultSlotCapacity }: Prop
             )}
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="maxSlotCapacity">Máximo por franja (techo duro)</Label>
+            <Input
+              id="maxSlotCapacity"
+              type="number"
+              min={0}
+              inputMode="numeric"
+              value={maxSlot}
+              onChange={(e) => setMaxSlot(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              No se podrá guardar (ni manual ni online) un pedido que supere esto. 0 = sin tope.
+            </p>
+            {err("maxSlotCapacity") && (
+              <p className="text-sm font-medium text-destructive">{err("maxSlotCapacity")}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="maxDailyCapacity">Máximo diario (techo duro)</Label>
+            <Input
+              id="maxDailyCapacity"
+              type="number"
+              min={0}
+              inputMode="numeric"
+              value={maxDaily}
+              onChange={(e) => setMaxDaily(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Tope absoluto de tazones por día. 0 = sin tope.
+            </p>
+            {err("maxDailyCapacity") && (
+              <p className="text-sm font-medium text-destructive">{err("maxDailyCapacity")}</p>
+            )}
+          </div>
+
           <div className="flex gap-2 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground sm:col-span-2">
             <Info className="mt-0.5 h-4 w-4 shrink-0" />
             <p>
-              Estas capacidades son límites flexibles: solo generan advertencias y no
-              impiden registrar pedidos.
+              La <strong>capacidad</strong> es un límite flexible: avisa y permite
+              guardar igual (con confirmación). El <strong>máximo</strong> es un techo
+              duro: bloquea el guardado, tanto manual como del formulario online.
             </p>
           </div>
         </CardContent>

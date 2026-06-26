@@ -86,3 +86,40 @@ describe("evaluateCapacity — soft limits never block", () => {
     expect(e.newSlotTotal).toBe(150);
   });
 });
+
+describe("evaluateCapacity — hard ceilings", () => {
+  it("does not hard-block when no max is set (0 = disabled)", () => {
+    const e = evaluateCapacity({ ...base, slotBowls: 100 }, 500);
+    expect(e.requiresApproval).toBe(true);
+    expect(e.hardBlocked).toBe(false);
+  });
+
+  it("allows soft-over-capacity but under the hard ceiling (verification zone)", () => {
+    const e = evaluateCapacity(
+      { ...base, slotBowls: 5, slotMaxCapacity: 10, dailyMaxCapacity: 40 },
+      3, // → 8: over soft 6, under hard 10
+    );
+    expect(e.exceededSlotCapacity).toBe(true);
+    expect(e.requiresApproval).toBe(true);
+    expect(e.hardBlocked).toBe(false);
+  });
+
+  it("hard-blocks when the slot hard ceiling is exceeded", () => {
+    const e = evaluateCapacity(
+      { ...base, slotBowls: 5, slotMaxCapacity: 10, dailyMaxCapacity: 40 },
+      6, // → 11 > 10
+    );
+    expect(e.exceededSlotMax).toBe(true);
+    expect(e.hardBlocked).toBe(true);
+    expect(e.hardWarning).toContain("10");
+  });
+
+  it("hard-blocks when the daily hard ceiling is exceeded", () => {
+    const e = evaluateCapacity(
+      { slotBowls: 0, dailyBowls: 38, slotCapacity: 6, dailyCapacity: 24, slotMaxCapacity: 12, dailyMaxCapacity: 40 },
+      5, // daily → 43 > 40
+    );
+    expect(e.exceededDailyMax).toBe(true);
+    expect(e.hardBlocked).toBe(true);
+  });
+});

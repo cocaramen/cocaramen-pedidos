@@ -1,10 +1,9 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/auth/session";
 import { authMode, devUsers } from "@/lib/auth/config";
+import { getBranding } from "@/server/settings";
 import { LoginForm } from "./login-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import Image from "next/image";
-import { APP_NAME } from "@/lib/app";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +11,7 @@ export default async function LoginPage() {
   const user = await getUser();
   if (user) redirect("/");
 
+  const branding = await getBranding();
   const isDev = authMode() === "dev";
   const firstDevUser = isDev ? [...devUsers().keys()][0] : undefined;
 
@@ -20,10 +20,15 @@ export default async function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
           <span className="relative h-24 w-24 overflow-hidden rounded-full shadow-md">
-            <Image src="/logo.png" alt={APP_NAME} fill sizes="96px" className="object-cover" priority />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={branding.logo ?? "/logo.png"}
+              alt={branding.name}
+              className="h-full w-full object-cover"
+            />
           </span>
-          <h1 className="text-2xl font-bold tracking-tight">{APP_NAME}</h1>
-          <p className="text-sm text-muted-foreground">Gestión interna de pedidos</p>
+          <h1 className="text-2xl font-bold tracking-tight">{branding.name}</h1>
+          <p className="text-sm text-muted-foreground">{branding.description}</p>
         </div>
         <Card className="shadow-lg">
           <CardHeader>

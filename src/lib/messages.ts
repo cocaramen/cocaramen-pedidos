@@ -121,7 +121,7 @@ export interface OrderForMessage {
 export function buildOrderVars(
   order: OrderForMessage,
   tiers: PricingTier[],
-  opts?: { publicUrl?: string },
+  opts?: { publicUrl?: string; businessName?: string },
 ): Record<string, string> {
   const pricing = priceOrder(
     order.items.map((i) => ({
@@ -156,7 +156,7 @@ export function buildOrderVars(
     notas: (order.customerNotes ?? "").trim(),
     seguimiento: (order.trackingUrl ?? "").trim(),
     enlace: opts?.publicUrl ?? "",
-    negocio: APP_NAME_SHORT,
+    negocio: opts?.businessName || APP_NAME_SHORT,
   };
 }
 

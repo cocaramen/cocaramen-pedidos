@@ -1,35 +1,38 @@
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import {
   getOrderByPublicToken,
   getActiveSlots,
   getActiveVolumeDiscounts,
 } from "@/server/queries";
+import { getBranding } from "@/server/settings";
 import { priceOrder } from "@/lib/pricing";
 import { formatArs } from "@/lib/money";
 import { formatLongDate, trimTime, isPublicLinkExpired } from "@/lib/dates";
 import { STATUS_LABELS, STATUS_BADGE_CLASSES } from "@/lib/order-status";
-import { APP_NAME_SHORT } from "@/lib/app";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({
+  branding,
+  children,
+}: {
+  branding: { name: string; logo: string | null };
+  children: React.ReactNode;
+}) {
   return (
     <div className="min-h-screen bg-muted/40 px-4 py-8">
       <div className="mx-auto w-full max-w-lg space-y-4">
         <div className="flex flex-col items-center gap-2 text-center">
           <span className="relative h-16 w-16 overflow-hidden rounded-full shadow-md">
-            <Image
-              src="/logo.png"
-              alt={APP_NAME_SHORT}
-              fill
-              sizes="64px"
-              className="object-cover"
-              priority
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={branding.logo ?? "/logo.png"}
+              alt={branding.name}
+              className="h-full w-full object-cover"
             />
           </span>
-          <span className="text-lg font-bold">{APP_NAME_SHORT}</span>
+          <span className="text-lg font-bold">{branding.name}</span>
         </div>
         {children}
       </div>
@@ -55,14 +58,15 @@ export default async function PublicOrderPage({
   const order = await getOrderByPublicToken(token);
   if (!order) notFound();
 
-  const [slots, discounts] = await Promise.all([
+  const [slots, discounts, branding] = await Promise.all([
     getActiveSlots(),
     getActiveVolumeDiscounts(),
+    getBranding(),
   ]);
 
   if (isPublicLinkExpired(order.deliveryDate, slots)) {
     return (
-      <Shell>
+      <Shell branding={branding}>
         <div className="rounded-xl border bg-card p-8 text-center">
           <p className="text-4xl">⌛</p>
           <h1 className="mt-3 text-lg font-semibold">Este enlace venció</h1>
@@ -83,12 +87,57 @@ export default async function PublicOrderPage({
     discounts,
   );
   const isPickup = order.fulfillmentType === "pickup";
+  const cancelled = order.status === "cancelled";
+  const delivered = order.status === "delivered";
+  const inVerification =
+    !cancelled &&
+    !delivered &&
+    !order.overCapacityApproved &&
+    (order.exceededSlotCapacity || order.exceededDailyCapacity);
 
   return (
-    <Shell>
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+    <Shell branding={branding}>
+      {cancelled && (
+        <div className="rounded-xl border-2 border-rose-300 bg-rose-600 p-5 text-center text-white shadow-sm">
+          <p className="text-3xl">✕</p>
+          <p className="mt-1 text-lg font-bold">Pedido cancelado</p>
+          <p className="mt-1 text-sm text-rose-50">
+            Este pedido fue cancelado. Si creés que es un error, escribinos.
+          </p>
+        </div>
+      )}
+      {delivered && (
+        <div className="rounded-xl border-2 border-emerald-300 bg-emerald-600 p-5 text-center text-white shadow-sm">
+          <p className="text-3xl">🎉</p>
+          <p className="mt-1 text-lg font-bold">¡Pedido entregado!</p>
+          <p className="mt-1 text-sm text-emerald-50">
+            ¡Gracias por tu compra! Esperamos que lo disfrutes.
+          </p>
+        </div>
+      )}
+      {inVerification && (
+        <div className="rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm text-warning-foreground">
+          <p className="font-medium">Tu pedido está en verificación ⏳</p>
+          <p className="mt-1">
+            El horario elegido estaba completo. Estamos confirmando disponibilidad y
+            te avisamos por WhatsApp. Esta página se actualiza con el estado.
+          </p>
+        </div>
+      )}
+      <div
+        className={cn(
+          "overflow-hidden rounded-xl border bg-card shadow-sm",
+          cancelled && "border-rose-300 opacity-90",
+          delivered && "border-emerald-300",
+        )}
+      >
         {/* Status banner */}
-        <div className="flex items-center justify-between gap-3 border-b bg-muted/30 px-5 py-4">
+        <div
+          className={cn(
+            "flex items-center justify-between gap-3 border-b px-5 py-4",
+            cancelled ? "bg-rose-50" : delivered ? "bg-emerald-50" : "bg-muted/30",
+          )}
+        >
           <div>
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
               Tu pedido
@@ -187,7 +236,7 @@ export default async function PublicOrderPage({
 
       <p className="px-2 text-center text-xs text-muted-foreground">
         Esta página muestra el estado actual de tu pedido y se actualiza
-        automáticamente. ¡Gracias por elegir {APP_NAME_SHORT}!
+        automáticamente. ¡Gracias por elegir {branding.name}!
       </p>
     </Shell>
   );

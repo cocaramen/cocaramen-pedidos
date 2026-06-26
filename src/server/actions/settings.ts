@@ -19,6 +19,8 @@ import {
   volumeDiscountSchema,
   messageTemplateSchema,
   namedOptionSchema,
+  brandingSchema,
+  brandingLogoSchema,
   capacitySettingsSchema,
   deliveryDaysSchema,
   deliverySlotSchema,
@@ -86,6 +88,8 @@ export async function updateCapacitySettings(input: unknown): Promise<ActionResu
     SETTING_KEYS.DEFAULT_SLOT_CAPACITY,
     String(parsed.data.defaultSlotCapacity),
   );
+  await setSetting(SETTING_KEYS.MAX_SLOT_CAPACITY, String(parsed.data.maxSlotCapacity));
+  await setSetting(SETTING_KEYS.MAX_DAILY_CAPACITY, String(parsed.data.maxDailyCapacity));
   revalidateSettings();
   return ok(undefined);
 }
@@ -102,6 +106,44 @@ export async function updateDeliveryDays(input: unknown): Promise<ActionResult> 
     parsed.data.activeDeliveryDays.join(","),
   );
   revalidateSettings();
+  return ok(undefined);
+}
+
+// ── Branding (name, short name, description, logo) ─────────────
+function revalidateBranding() {
+  // The brand renders in the shared layout + login + public order page.
+  revalidatePath("/", "layout");
+  revalidatePath("/login");
+}
+
+export async function updateBranding(input: unknown): Promise<ActionResult> {
+  await requireUser();
+  const parsed = brandingSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Datos inválidos.", { fieldErrors: parsed.error.flatten().fieldErrors });
+  }
+  await setSetting(SETTING_KEYS.BUSINESS_NAME, parsed.data.name);
+  await setSetting(SETTING_KEYS.BUSINESS_NAME_SHORT, parsed.data.nameShort);
+  await setSetting(SETTING_KEYS.BUSINESS_DESCRIPTION, parsed.data.description ?? "");
+  revalidateBranding();
+  return ok(undefined);
+}
+
+export async function updateBrandingLogo(input: unknown): Promise<ActionResult> {
+  await requireUser();
+  const parsed = brandingLogoSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail("Imagen inválida.", { fieldErrors: parsed.error.flatten().fieldErrors });
+  }
+  await setSetting(SETTING_KEYS.BUSINESS_LOGO, parsed.data.logo);
+  revalidateBranding();
+  return ok(undefined);
+}
+
+export async function clearBrandingLogo(): Promise<ActionResult> {
+  await requireUser();
+  await setSetting(SETTING_KEYS.BUSINESS_LOGO, "");
+  revalidateBranding();
   return ok(undefined);
 }
 

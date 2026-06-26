@@ -484,14 +484,21 @@ export function OrderForm({
                   capacity={preview.dailyCapacity}
                   exceeded={preview.exceededDailyCapacity}
                 />
-                {preview.requiresApproval && (
-                  <div className="flex gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-                    <div className="space-y-1">
-                      {preview.slotWarning && <p>{preview.slotWarning}</p>}
-                      {preview.dailyWarning && <p>{preview.dailyWarning}</p>}
-                    </div>
+                {preview.hardBlocked ? (
+                  <div className="flex gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <p>{preview.hardWarning}</p>
                   </div>
+                ) : (
+                  preview.requiresApproval && (
+                    <div className="flex gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                      <div className="space-y-1">
+                        {preview.slotWarning && <p>{preview.slotWarning}</p>}
+                        {preview.dailyWarning && <p>{preview.dailyWarning}</p>}
+                      </div>
+                    </div>
+                  )
                 )}
               </>
             ) : (
@@ -500,7 +507,11 @@ export function OrderForm({
               </p>
             )}
 
-            <Button type="submit" className="w-full" disabled={pending}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={pending || Boolean(preview?.hardBlocked)}
+            >
               {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isEdit ? "Guardar cambios" : "Crear pedido"}
             </Button>

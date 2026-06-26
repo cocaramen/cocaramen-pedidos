@@ -8,18 +8,22 @@ import { SocialLinks } from "./social-links";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Menu, X } from "lucide-react";
-import Image from "next/image";
-import { APP_NAME, APP_NAME_SHORT } from "@/lib/app";
+import type { Branding } from "@/server/settings";
 
-function Brand() {
+function Brand({ branding }: { branding: Branding }) {
   return (
     <Link href="/" className="flex items-center gap-2 px-5 py-5">
       <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full">
-        <Image src="/logo.png" alt={APP_NAME} fill sizes="36px" className="object-cover" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={branding.logo ?? "/logo.png"}
+          alt={branding.name}
+          className="h-full w-full object-cover"
+        />
       </span>
       <div className="leading-tight">
-        <div className="text-sm font-bold leading-snug tracking-tight">{APP_NAME}</div>
-        <div className="text-xs text-muted-foreground">Gestión de pedidos</div>
+        <div className="text-sm font-bold leading-snug tracking-tight">{branding.name}</div>
+        <div className="text-xs text-muted-foreground">{branding.description}</div>
       </div>
     </Link>
   );
@@ -27,9 +31,11 @@ function Brand() {
 
 export function AppShell({
   email,
+  branding,
   children,
 }: {
   email: string;
+  branding: Branding;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -38,7 +44,7 @@ export function AppShell({
     <div className="flex min-h-screen">
       {/* Desktop sidebar */}
       <aside className="hidden w-64 shrink-0 flex-col border-r bg-card lg:flex">
-        <Brand />
+        <Brand branding={branding} />
         <div className="flex-1 py-2">
           <Nav />
         </div>
@@ -58,7 +64,7 @@ export function AppShell({
           />
           <aside className="absolute left-0 top-0 flex h-full w-64 flex-col bg-card shadow-xl">
             <div className="flex items-center justify-between">
-              <Brand />
+              <Brand branding={branding} />
               <Button
                 variant="ghost"
                 size="icon"
@@ -95,7 +101,7 @@ export function AppShell({
             >
               <Menu className="h-5 w-5" />
             </Button>
-            <span className="truncate font-semibold lg:hidden">{APP_NAME_SHORT}</span>
+            <span className="truncate font-semibold lg:hidden">{branding.nameShort}</span>
           </div>
           <UserMenu email={email} />
         </header>

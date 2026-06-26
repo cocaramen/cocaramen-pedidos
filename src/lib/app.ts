@@ -4,6 +4,10 @@ export const APP_NAME = "Coca Ramen Delivery System Super Duper Awesome";
 /** Short form for tight spaces (e.g. mobile header). */
 export const APP_NAME_SHORT = "Coca Ramen";
 
+/** Default tagline/description. These constants are the fallback when the
+ *  configurable branding (Settings → Marca) is empty. */
+export const APP_DESCRIPTION = "Gestión de pedidos";
+
 /**
  * Social / contact shortcuts shown in the app shell. Leave a value empty to
  * hide that link. `whatsapp` must be the international number, digits only

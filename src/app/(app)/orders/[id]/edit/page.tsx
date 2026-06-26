@@ -9,7 +9,7 @@ import {
   getActiveShippingMethods,
   getMessageTemplates,
 } from "@/server/queries";
-import { getSettings } from "@/server/settings";
+import { getSettings, getBranding } from "@/server/settings";
 import { nextDeliveryDate } from "@/lib/dates";
 import { buildOrderVars } from "@/lib/messages";
 import { OrderForm, type OrderFormInitial } from "@/components/orders/order-form";
@@ -35,6 +35,7 @@ export default async function EditOrderPage({
     shippingMethods,
     templates,
     settings,
+    branding,
   ] = await Promise.all([
     getOrderById(id),
     getActiveProducts(),
@@ -44,6 +45,7 @@ export default async function EditOrderPage({
     getActiveShippingMethods(),
     getMessageTemplates(),
     getSettings(),
+    getBranding(),
   ]);
 
   if (!order) notFound();
@@ -83,7 +85,10 @@ export default async function EditOrderPage({
   const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
   const publicUrl = `${proto}://${host}/p/${order.publicToken}`;
 
-  const messageVars = buildOrderVars(order, volumeDiscounts, { publicUrl });
+  const messageVars = buildOrderVars(order, volumeDiscounts, {
+    publicUrl,
+    businessName: branding.nameShort,
+  });
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">

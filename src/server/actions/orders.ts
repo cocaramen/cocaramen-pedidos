@@ -86,6 +86,13 @@ export async function createOrder(input: unknown): Promise<ActionResult<{ id: st
   });
   const evaluation = evaluateCapacity(snapshot, totalBowls);
 
+  if (evaluation.hardBlocked) {
+    return fail(
+      evaluation.hardWarning ?? "El pedido supera el máximo permitido.",
+      { capacity: evaluation },
+    );
+  }
+
   if (evaluation.requiresApproval && !data.overCapacityApproved) {
     return fail("Este pedido supera la capacidad. Confirme para continuar.", {
       needsApproval: true,
@@ -157,6 +164,13 @@ export async function updateOrder(
     excludeOrderId: id,
   });
   const evaluation = evaluateCapacity(snapshot, totalBowls);
+
+  if (evaluation.hardBlocked) {
+    return fail(
+      evaluation.hardWarning ?? "El pedido supera el máximo permitido.",
+      { capacity: evaluation },
+    );
+  }
 
   if (evaluation.requiresApproval && !data.overCapacityApproved) {
     return fail("Este pedido supera la capacidad. Confirme para continuar.", {

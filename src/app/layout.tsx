@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
-import { APP_NAME } from "@/lib/app";
+import { getBranding } from "@/server/settings";
 
-export const metadata: Metadata = {
-  title: `${APP_NAME} · Gestión de Pedidos`,
-  description: "Sistema interno de gestión de pedidos de ramen",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const branding = await getBranding();
+  return {
+    title: `${branding.name} · ${branding.description}`,
+    description: branding.description,
+  };
+}
 
 export default function RootLayout({
   children,

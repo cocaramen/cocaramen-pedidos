@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createOrderSchema, deliverySlotSchema } from "@/lib/validation";
+import { createOrderSchema, deliverySlotSchema, publicOrderSchema } from "@/lib/validation";
 
 const validOrder = {
   customerName: "Juan Pérez",
@@ -66,6 +66,47 @@ describe("createOrderSchema", () => {
       items: [{ productId: "22222222-2222-2222-2222-222222222222", quantity: 0 }],
     });
     expect(r.success).toBe(false);
+  });
+});
+
+describe("publicOrderSchema", () => {
+  const validPublic = {
+    customerName: "Juan",
+    customerPhone: "+54 9 381 555 1234",
+    customerAddress: "Calle 1",
+    fulfillmentType: "delivery",
+    paymentMethodId: "11111111-1111-1111-1111-111111111111",
+    deliveryDate: "2026-06-26",
+    deliverySlotId: "22222222-2222-2222-2222-222222222222",
+    items: [{ productId: "33333333-3333-3333-3333-333333333333", quantity: 2 }],
+  };
+
+  it("accepts a valid delivery order", () => {
+    expect(publicOrderSchema.safeParse(validPublic).success).toBe(true);
+  });
+
+  it("rejects when the honeypot is filled", () => {
+    expect(
+      publicOrderSchema.safeParse({ ...validPublic, website: "http://spam" }).success,
+    ).toBe(false);
+  });
+
+  it("requires an address for delivery but not for pickup", () => {
+    expect(
+      publicOrderSchema.safeParse({ ...validPublic, customerAddress: "" }).success,
+    ).toBe(false);
+    expect(
+      publicOrderSchema.safeParse({
+        ...validPublic,
+        fulfillmentType: "pickup",
+        customerAddress: "",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("requires a payment method", () => {
+    const { paymentMethodId: _omit, ...noPay } = validPublic;
+    expect(publicOrderSchema.safeParse(noPay).success).toBe(false);
   });
 });
 

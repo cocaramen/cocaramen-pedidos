@@ -230,6 +230,22 @@ export const orderItems = pgTable(
 );
 
 // ─────────────────────────────────────────────────────────────
+// rate_limit_hits — lightweight per-key request log for rate limiting
+// (used by the public order form; no external service needed)
+// ─────────────────────────────────────────────────────────────
+export const rateLimitHits = pgTable(
+  "rate_limit_hits",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bucket: text("bucket").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    bucketIdx: index("rate_limit_hits_bucket_idx").on(t.bucket, t.createdAt),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────
 // delivery_runs — actual shipping cost of a delivery run (date + slot)
 // ─────────────────────────────────────────────────────────────
 export const deliveryRuns = pgTable(
@@ -332,8 +348,14 @@ export type NewDeliveryRun = typeof deliveryRuns.$inferInsert;
 
 // Settings keys (typed constants)
 export const SETTING_KEYS = {
+  BUSINESS_NAME: "business_name",
+  BUSINESS_NAME_SHORT: "business_name_short",
+  BUSINESS_DESCRIPTION: "business_description",
+  BUSINESS_LOGO: "business_logo",
   DEFAULT_SLOT_CAPACITY: "default_slot_capacity",
   DEFAULT_DAILY_CAPACITY: "default_daily_capacity",
+  MAX_SLOT_CAPACITY: "max_slot_capacity",
+  MAX_DAILY_CAPACITY: "max_daily_capacity",
   ACTIVE_DELIVERY_DAYS: "active_delivery_days",
   ORIGIN_ADDRESS: "origin_address",
   ORIGIN_LAT: "origin_lat",

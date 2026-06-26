@@ -54,5 +54,7 @@ export async function buildCapacitySnapshot(opts: {
     dailyBowls,
     slotCapacity: slot?.capacityLimit ?? settingsData.defaultSlotCapacity,
     dailyCapacity: settingsData.defaultDailyCapacity,
+    slotMaxCapacity: settingsData.maxSlotCapacity,
+    dailyMaxCapacity: settingsData.maxDailyCapacity,
   };
 }

@@ -14,10 +14,14 @@ export interface CapacitySnapshot {
   slotBowls: number;
   /** Bowls already booked across the whole date, EXCLUDING the order being edited. */
   dailyBowls: number;
-  /** Capacity limit for the target slot. */
+  /** Soft capacity limit for the target slot (exceeding warns + needs approval). */
   slotCapacity: number;
-  /** Daily capacity limit. */
+  /** Soft daily capacity limit. */
   dailyCapacity: number;
+  /** Hard slot ceiling — cannot be overridden. 0 = no hard limit. */
+  slotMaxCapacity?: number;
+  /** Hard daily ceiling — cannot be overridden. 0 = no hard limit. */
+  dailyMaxCapacity?: number;
 }
 
 export interface CapacityEvaluation {
@@ -31,11 +35,20 @@ export interface CapacityEvaluation {
   dailyRemaining: number;
   exceededSlotCapacity: boolean;
   exceededDailyCapacity: boolean;
-  /** True when either limit is exceeded → operator must explicitly approve. */
+  /** True when either soft limit is exceeded → operator must explicitly approve. */
   requiresApproval: boolean;
+  /** Hard ceilings (0 = disabled) and whether this order breaks them. */
+  slotMaxCapacity: number;
+  dailyMaxCapacity: number;
+  exceededSlotMax: boolean;
+  exceededDailyMax: boolean;
+  /** True when a hard ceiling is exceeded → CANNOT be saved (no override). */
+  hardBlocked: boolean;
   /** Spanish, operator-facing warning text. Undefined when within capacity. */
   slotWarning?: string;
   dailyWarning?: string;
+  /** Spanish, blocking text shown when hardBlocked. */
+  hardWarning?: string;
 }
 
 /** Sum the quantities of a set of order items. */
@@ -62,6 +75,13 @@ export function evaluateCapacity(
   const exceededSlotCapacity = newSlotTotal > snapshot.slotCapacity;
   const exceededDailyCapacity = newDailyTotal > snapshot.dailyCapacity;
 
+  // Hard ceilings (0 = disabled). These BLOCK saving — no operator override.
+  const slotMaxCapacity = snapshot.slotMaxCapacity ?? 0;
+  const dailyMaxCapacity = snapshot.dailyMaxCapacity ?? 0;
+  const exceededSlotMax = slotMaxCapacity > 0 && newSlotTotal > slotMaxCapacity;
+  const exceededDailyMax = dailyMaxCapacity > 0 && newDailyTotal > dailyMaxCapacity;
+  const hardBlocked = exceededSlotMax || exceededDailyMax;
+
   return {
     orderBowls: bowls,
     newSlotTotal,
@@ -73,6 +93,20 @@ export function evaluateCapacity(
     exceededSlotCapacity,
     exceededDailyCapacity,
     requiresApproval: exceededSlotCapacity || exceededDailyCapacity,
+    slotMaxCapacity,
+    dailyMaxCapacity,
+    exceededSlotMax,
+    exceededDailyMax,
+    hardBlocked,
+    hardWarning: exceededSlotMax
+      ? `Esta franja admite como máximo ${slotMaxCapacity} ${pluralBowls(
+          slotMaxCapacity,
+        )} y este pedido la llevaría a ${newSlotTotal}. No se puede guardar; reducí la cantidad o elegí otra franja.`
+      : exceededDailyMax
+        ? `El máximo diario es de ${dailyMaxCapacity} ${pluralBowls(
+            dailyMaxCapacity,
+          )} y este pedido llevaría el día a ${newDailyTotal}. No se puede guardar; reducí la cantidad o cambiá la fecha.`
+        : undefined,
     slotWarning: exceededSlotCapacity
       ? `Esta franja horaria contiene actualmente ${snapshot.slotBowls} ${pluralBowls(
           snapshot.slotBowls,

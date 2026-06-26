@@ -6,7 +6,7 @@ import {
   getAllPaymentMethods,
   getAllShippingMethods,
 } from "@/server/queries";
-import { getSettings } from "@/server/settings";
+import { getSettings, getBranding } from "@/server/settings";
 import {
   createPaymentMethod,
   updatePaymentMethod,
@@ -21,6 +21,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 import { CapacityForm } from "@/components/settings/capacity-form";
 import { DeliveryDaysForm } from "@/components/settings/delivery-days-form";
+import { BrandingForm } from "@/components/settings/branding-form";
 import { ProductsManager } from "@/components/settings/products-manager";
 import { VolumeDiscountsManager } from "@/components/settings/volume-discounts-manager";
 import { MessageTemplatesManager } from "@/components/settings/message-templates-manager";
@@ -34,6 +35,7 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage() {
   const [
     settings,
+    branding,
     products,
     slots,
     volumeDiscounts,
@@ -42,6 +44,7 @@ export default async function SettingsPage() {
     shippingMethods,
   ] = await Promise.all([
     getSettings(),
+    getBranding(),
     getAllProducts(),
     getAllSlots(),
     getAllVolumeDiscounts(),
@@ -59,8 +62,9 @@ export default async function SettingsPage() {
         description="Gestione la capacidad de producción, los productos y los días y franjas de entrega."
       />
 
-      <Tabs defaultValue="capacity" className="space-y-6">
+      <Tabs defaultValue="branding" className="space-y-6">
         <TabsList>
+          <TabsTrigger value="branding">Marca</TabsTrigger>
           <TabsTrigger value="capacity">Capacidad</TabsTrigger>
           <TabsTrigger value="delivery-days">Días de entrega</TabsTrigger>
           <TabsTrigger value="products">Productos</TabsTrigger>
@@ -73,10 +77,16 @@ export default async function SettingsPage() {
           <TabsTrigger value="search-area">Área de búsqueda</TabsTrigger>
         </TabsList>
 
+        <TabsContent value="branding">
+          <BrandingForm branding={branding} />
+        </TabsContent>
+
         <TabsContent value="capacity">
           <CapacityForm
             defaultDailyCapacity={settings.defaultDailyCapacity}
             defaultSlotCapacity={settings.defaultSlotCapacity}
+            maxSlotCapacity={settings.maxSlotCapacity}
+            maxDailyCapacity={settings.maxDailyCapacity}
           />
         </TabsContent>
 

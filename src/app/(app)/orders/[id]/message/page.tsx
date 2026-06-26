@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { Pencil } from "lucide-react";
 
 import { getOrderById, getMessageTemplates, getActiveVolumeDiscounts } from "@/server/queries";
+import { getBranding } from "@/server/settings";
 import { buildOrderVars } from "@/lib/messages";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -17,10 +18,11 @@ export default async function OrderMessagePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [order, templates, volumeDiscounts] = await Promise.all([
+  const [order, templates, volumeDiscounts, branding] = await Promise.all([
     getOrderById(id),
     getMessageTemplates(),
     getActiveVolumeDiscounts(),
+    getBranding(),
   ]);
   if (!order) notFound();
 
@@ -29,7 +31,10 @@ export default async function OrderMessagePage({
   const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
   const publicUrl = `${proto}://${host}/p/${order.publicToken}`;
 
-  const vars = buildOrderVars(order, volumeDiscounts, { publicUrl });
+  const vars = buildOrderVars(order, volumeDiscounts, {
+    publicUrl,
+    businessName: branding.nameShort,
+  });
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">

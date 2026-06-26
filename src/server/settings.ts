@@ -2,10 +2,48 @@ import "server-only";
 import { db } from "@/db";
 import { settings, SETTING_KEYS } from "@/db/schema";
 import { inArray } from "drizzle-orm";
+import { APP_NAME, APP_NAME_SHORT, APP_DESCRIPTION } from "@/lib/app";
+
+export interface Branding {
+  name: string;
+  nameShort: string;
+  description: string;
+  /** Logo as a data URI, or null to use the bundled /logo.png. */
+  logo: string | null;
+}
+
+/**
+ * Configurable business branding (Settings → Marca). Kept separate from
+ * getSettings() so the (potentially large) logo data URI is only loaded where
+ * the brand is actually rendered. Falls back to the bundled defaults.
+ */
+export async function getBranding(): Promise<Branding> {
+  const rows = await db
+    .select()
+    .from(settings)
+    .where(
+      inArray(settings.key, [
+        SETTING_KEYS.BUSINESS_NAME,
+        SETTING_KEYS.BUSINESS_NAME_SHORT,
+        SETTING_KEYS.BUSINESS_DESCRIPTION,
+        SETTING_KEYS.BUSINESS_LOGO,
+      ]),
+    );
+  const map = new Map(rows.map((r) => [r.key, r.value]));
+  return {
+    name: map.get(SETTING_KEYS.BUSINESS_NAME)?.trim() || APP_NAME,
+    nameShort: map.get(SETTING_KEYS.BUSINESS_NAME_SHORT)?.trim() || APP_NAME_SHORT,
+    description: map.get(SETTING_KEYS.BUSINESS_DESCRIPTION)?.trim() || APP_DESCRIPTION,
+    logo: map.get(SETTING_KEYS.BUSINESS_LOGO)?.trim() || null,
+  };
+}
 
 export interface AppSettings {
   defaultSlotCapacity: number;
   defaultDailyCapacity: number;
+  /** Hard ceilings (0 = no hard limit). Cannot be overridden when set. */
+  maxSlotCapacity: number;
+  maxDailyCapacity: number;
   activeDeliveryDays: string[];
   /** Delivery origin (kitchen). Null coords = not configured. */
   originAddress: string | null;
@@ -21,6 +59,8 @@ export interface AppSettings {
 const DEFAULTS: AppSettings = {
   defaultSlotCapacity: 6,
   defaultDailyCapacity: 24,
+  maxSlotCapacity: 0,
+  maxDailyCapacity: 0,
   activeDeliveryDays: ["friday"],
   originAddress: null,
   originLat: null,
@@ -39,6 +79,8 @@ export async function getSettings(): Promise<AppSettings> {
       inArray(settings.key, [
         SETTING_KEYS.DEFAULT_SLOT_CAPACITY,
         SETTING_KEYS.DEFAULT_DAILY_CAPACITY,
+        SETTING_KEYS.MAX_SLOT_CAPACITY,
+        SETTING_KEYS.MAX_DAILY_CAPACITY,
         SETTING_KEYS.ACTIVE_DELIVERY_DAYS,
         SETTING_KEYS.ORIGIN_ADDRESS,
         SETTING_KEYS.ORIGIN_LAT,
@@ -60,6 +102,11 @@ export async function getSettings(): Promise<AppSettings> {
     defaultDailyCapacity: numberOr(
       map.get(SETTING_KEYS.DEFAULT_DAILY_CAPACITY),
       DEFAULTS.defaultDailyCapacity,
+    ),
+    maxSlotCapacity: numberOr(map.get(SETTING_KEYS.MAX_SLOT_CAPACITY), DEFAULTS.maxSlotCapacity),
+    maxDailyCapacity: numberOr(
+      map.get(SETTING_KEYS.MAX_DAILY_CAPACITY),
+      DEFAULTS.maxDailyCapacity,
     ),
     activeDeliveryDays: parseDays(map.get(SETTING_KEYS.ACTIVE_DELIVERY_DAYS)),
     originAddress: map.get(SETTING_KEYS.ORIGIN_ADDRESS) || null,

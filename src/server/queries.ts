@@ -103,6 +103,22 @@ export async function getOrderById(id: string) {
   });
 }
 
+// ── Public self-order form (no auth) ───────────────────────────
+/** Bowls already reserved per (date, slot) for the given dates (excl. cancelled). */
+export async function getBowlsByDateSlot(dates: string[]) {
+  if (!dates.length) return [];
+  return db
+    .select({
+      date: orders.deliveryDate,
+      slotId: orders.deliverySlotId,
+      bowls: sql<number>`coalesce(sum(${orderItems.quantity}), 0)::int`,
+    })
+    .from(orders)
+    .innerJoin(orderItems, eq(orderItems.orderId, orders.id))
+    .where(and(inArray(orders.deliveryDate, dates), sql`${orders.status} <> 'cancelled'`))
+    .groupBy(orders.deliveryDate, orders.deliverySlotId);
+}
+
 // ── Public order page (no auth) ────────────────────────────────
 export async function getOrderByPublicToken(token: string) {
   return db.query.orders.findFirst({

@@ -77,14 +77,79 @@ export const orderBaseSchema = z.object({
 export const createOrderSchema = orderBaseSchema;
 export const updateOrderSchema = orderBaseSchema;
 
+// Customer-facing self-order form (public /pedir). Restricted set of fields:
+// no status, no shipping method, no over-capacity override. Includes a honeypot.
+export const publicOrderSchema = z
+  .object({
+    customerName: z.string().trim().min(1, "Ingresá tu nombre.").max(160),
+    customerPhone: z
+      .string()
+      .trim()
+      .min(1, "Ingresá tu teléfono.")
+      .regex(phoneRegex, "Teléfono inválido."),
+    customerAddress: z.string().trim().max(500).optional().or(z.literal("")),
+    fulfillmentType: z.enum(["delivery", "pickup"]).default("delivery"),
+    paymentMethodId: z.string().uuid("Elegí una forma de pago."),
+    deliveryDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida."),
+    deliverySlotId: z.string().uuid("Elegí un horario."),
+    items: z
+      .array(orderItemSchema)
+      .min(1, "Elegí al menos un plato.")
+      .superRefine((items, ctx) => {
+        const seen = new Set<string>();
+        for (const i of items) {
+          if (seen.has(i.productId)) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Producto duplicado." });
+          }
+          seen.add(i.productId);
+        }
+      }),
+    customerNotes: z.string().trim().max(1000).optional().or(z.literal("")),
+    /** Honeypot — must stay empty (bots fill it). */
+    website: z.string().max(0).optional().or(z.literal("")),
+  })
+  .superRefine((data, ctx) => {
+    if (data.fulfillmentType === "delivery" && !data.customerAddress?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["customerAddress"],
+        message: "Ingresá tu dirección para el envío.",
+      });
+    }
+  });
+
+export type PublicOrderInput = z.infer<typeof publicOrderSchema>;
+
 export type OrderInput = z.infer<typeof orderBaseSchema>;
 export type OrderItemInput = z.infer<typeof orderItemSchema>;
 
 // ── Settings / config validation ──────────────────────────────
-export const capacitySettingsSchema = z.object({
-  defaultDailyCapacity: z.coerce.number().int().min(0).max(100000),
-  defaultSlotCapacity: z.coerce.number().int().min(0).max(100000),
-});
+export const capacitySettingsSchema = z
+  .object({
+    defaultDailyCapacity: z.coerce.number().int().min(0).max(100000),
+    defaultSlotCapacity: z.coerce.number().int().min(0).max(100000),
+    // Hard ceilings (0 = sin límite). Cannot be overridden when set.
+    maxSlotCapacity: z.coerce.number().int().min(0).max(100000).default(0),
+    maxDailyCapacity: z.coerce.number().int().min(0).max(100000).default(0),
+  })
+  .superRefine((d, ctx) => {
+    if (d.maxSlotCapacity > 0 && d.maxSlotCapacity < d.defaultSlotCapacity) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["maxSlotCapacity"],
+        message: "El máximo por franja no puede ser menor que la capacidad.",
+      });
+    }
+    if (d.maxDailyCapacity > 0 && d.maxDailyCapacity < d.defaultDailyCapacity) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["maxDailyCapacity"],
+        message: "El máximo diario no puede ser menor que la capacidad.",
+      });
+    }
+  });
 
 export const productSchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio.").max(120),
@@ -140,6 +205,21 @@ export const namedOptionSchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio.").max(80),
   isActive: z.coerce.boolean().default(true),
   sortOrder: z.coerce.number().int().min(0).default(0),
+});
+
+export const brandingSchema = z.object({
+  name: z.string().trim().min(1, "El nombre es obligatorio.").max(120),
+  nameShort: z.string().trim().min(1, "El nombre corto es obligatorio.").max(60),
+  description: z.string().trim().max(200).optional().or(z.literal("")),
+});
+
+export const brandingLogoSchema = z.object({
+  // Resized client-side; kept small. data:image/...;base64,...
+  logo: z
+    .string()
+    .trim()
+    .regex(/^data:image\/(png|jpeg|webp);base64,/, "Imagen inválida.")
+    .max(700_000, "El logo es demasiado grande."),
 });
 
 export const messageTemplateSchema = z.object({

@@ -1,5 +1,23 @@
 import { describe, it, expect } from "vitest";
-import { workingDayEnd, isPublicLinkExpired } from "@/lib/dates";
+import { workingDayEnd, isPublicLinkExpired, upcomingDeliveryDates } from "@/lib/dates";
+
+describe("upcomingDeliveryDates", () => {
+  it("lists the next N matching weekdays including today", () => {
+    const thu = new Date(2026, 5, 25, 12); // Thu 2026-06-25 (local)
+    const r = upcomingDeliveryDates(["friday"], 3, thu);
+    expect(r).toEqual(["2026-06-26", "2026-07-03", "2026-07-10"]);
+  });
+
+  it("includes today when it is a delivery day", () => {
+    const fri = new Date(2026, 5, 26, 12); // Fri 2026-06-26 (local)
+    const r = upcomingDeliveryDates(["friday"], 1, fri);
+    expect(r).toEqual(["2026-06-26"]);
+  });
+
+  it("returns nothing when no active days", () => {
+    expect(upcomingDeliveryDates([], 3, new Date(2026, 5, 25, 12))).toEqual([]);
+  });
+});
 
 const NIGHT_SLOTS = [
   { endTime: "22:00:00" },

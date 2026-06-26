@@ -40,6 +40,20 @@ function itemsSummary(items: { quantity: number; product: { name: string } }[]):
   return items.map((i) => `${i.quantity}× ${i.product.name}`).join(", ");
 }
 
+/** Over soft capacity but not yet approved (e.g. a public order awaiting review). */
+function needsReview(o: {
+  exceededSlotCapacity: boolean;
+  exceededDailyCapacity: boolean;
+  overCapacityApproved: boolean;
+  status: OrderStatus;
+}): boolean {
+  return (
+    o.status !== "cancelled" &&
+    !o.overCapacityApproved &&
+    (o.exceededSlotCapacity || o.exceededDailyCapacity)
+  );
+}
+
 export default async function OrdersPage({
   searchParams,
 }: {
@@ -144,17 +158,27 @@ export default async function OrdersPage({
                           <span className="inline-flex items-center gap-1 font-semibold tabular-nums">
                             <Soup className="h-4 w-4 text-muted-foreground" />
                             {o.totalBowls}
-                            {o.overCapacityApproved && (
-                              <AlertTriangle className="h-4 w-4 text-warning" />
+                            {needsReview(o) ? (
+                              <AlertTriangle className="h-4 w-4 text-destructive" />
+                            ) : (
+                              o.overCapacityApproved && (
+                                <AlertTriangle className="h-4 w-4 text-warning" />
+                              )
                             )}
                           </span>
                         </TooltipTrigger>
                         <TooltipContent>
                           <p className="max-w-[220px]">{itemsSummary(o.items) || "Sin tazones"}</p>
-                          {o.overCapacityApproved && (
-                            <p className="mt-1 text-warning">
-                              Capacidad superada · aprobado manualmente
+                          {needsReview(o) ? (
+                            <p className="mt-1 text-destructive">
+                              Sobrecupo · pendiente de verificación
                             </p>
+                          ) : (
+                            o.overCapacityApproved && (
+                              <p className="mt-1 text-warning">
+                                Capacidad superada · aprobado manualmente
+                              </p>
+                            )
                           )}
                         </TooltipContent>
                       </Tooltip>
@@ -195,8 +219,12 @@ export default async function OrdersPage({
                     </span>
                     <span className="inline-flex items-center gap-1 font-semibold">
                       <Soup className="h-4 w-4" /> {o.totalBowls}
-                      {o.overCapacityApproved && (
-                        <AlertTriangle className="h-4 w-4 text-warning" />
+                      {needsReview(o) ? (
+                        <AlertTriangle className="h-4 w-4 text-destructive" />
+                      ) : (
+                        o.overCapacityApproved && (
+                          <AlertTriangle className="h-4 w-4 text-warning" />
+                        )
                       )}
                     </span>
                   </div>

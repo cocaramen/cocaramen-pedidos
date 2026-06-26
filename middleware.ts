@@ -5,7 +5,7 @@ const SESSION_COOKIE = "ramen_session";
 const PUBLIC_PATHS = ["/login"];
 // Fully open, no-auth pages — accessible to anyone, with no auth redirects in
 // either direction (e.g. the public order page shared with customers).
-const OPEN_PATHS = ["/p/"];
+const OPEN_PATHS = ["/p/", "/pedir"];
 
 /**
  * Coarse route protection. Pages additionally call requireUser() for the
