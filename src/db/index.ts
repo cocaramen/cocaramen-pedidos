@@ -16,18 +16,27 @@ const globalForDb = globalThis as unknown as {
   __ramenClient?: ReturnType<typeof postgres>;
 };
 
-// `prepare: false` keeps things compatible with the Supabase transaction
-// pooler (PgBouncer) used in production.
+// Connection tuning for Vercel serverless + Supabase transaction pooler:
 //
-// `max` must be > 1: postgres-js pipelines concurrent queries onto a single
-// connection, which DEADLOCKS on Supabase's transaction pooler (it doesn't
-// support pipelining). A small pool lets `Promise.all([...])` queries run on
-// separate connections. With max:1 pages like /settings hang forever.
+// - `prepare: false` → compatible with PgBouncer (pooler).
+// - `max` MUST be > 1: postgres-js pipelines concurrent queries onto a single
+//   connection, which DEADLOCKS on the transaction pooler (no pipelining). A
+//   small pool lets `Promise.all([...])` run on separate connections. But it
+//   must also stay SMALL: every warm serverless instance keeps its own pool,
+//   so a big `max` × many instances exhausts the pooler (queries then hang
+//   until they hit statement_timeout / the 300s function limit). 5 is a safe
+//   middle ground (no deadlock, low pressure).
+// - `idle_timeout` closes idle connections fast so they return to the pooler
+//   instead of being hoarded by warm instances.
+// - `connect_timeout` fails fast instead of hanging when the pooler is busy.
 const client =
   globalForDb.__ramenClient ??
   postgres(connectionString, {
     prepare: false,
-    max: 10,
+    max: 5,
+    idle_timeout: 20, // seconds
+    connect_timeout: 15, // seconds
+    max_lifetime: 60 * 30, // recycle connections every 30 min
   });
 
 if (process.env.NODE_ENV !== "production") {
