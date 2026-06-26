@@ -13,7 +13,16 @@ import { SETTING_KEYS } from "@/db/schema";
 import type { OrderStatus } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { setSetting } from "@/server/settings";
+import { setSetting, getBranding } from "@/server/settings";
+import {
+  storageConfigured,
+  uploadPublicImage,
+  removeFromBucket,
+  parseDataUri,
+  publicUrlToPath,
+} from "@/lib/supabase/storage";
+
+const LOGO_BUCKET = "branding";
 import {
   productSchema,
   volumeDiscountSchema,
@@ -135,14 +144,47 @@ export async function updateBrandingLogo(input: unknown): Promise<ActionResult> 
   if (!parsed.success) {
     return fail("Imagen inválida.", { fieldErrors: parsed.error.flatten().fieldErrors });
   }
-  await setSetting(SETTING_KEYS.BUSINESS_LOGO, parsed.data.logo);
+
+  const prev = (await getBranding()).logo;
+  let value = parsed.data.logo; // data URI — the fallback when Storage is off.
+
+  if (storageConfigured()) {
+    try {
+      const img = parseDataUri(parsed.data.logo);
+      if (img) {
+        const ext = img.contentType.split("/")[1] || "webp";
+        value = await uploadPublicImage({
+          bucket: LOGO_BUCKET,
+          path: `logo-${Date.now()}.${ext}`,
+          bytes: img.bytes,
+          contentType: img.contentType,
+        });
+      }
+    } catch {
+      value = parsed.data.logo; // upload failed → keep the inline data URI
+    }
+  }
+
+  await setSetting(SETTING_KEYS.BUSINESS_LOGO, value);
+
+  // Remove the previous Storage object if it was ours.
+  if (prev && prev !== value) {
+    const prevPath = publicUrlToPath(prev, LOGO_BUCKET);
+    if (prevPath) await removeFromBucket(LOGO_BUCKET, prevPath);
+  }
+
   revalidateBranding();
   return ok(undefined);
 }
 
 export async function clearBrandingLogo(): Promise<ActionResult> {
   await requireUser();
+  const prev = (await getBranding()).logo;
   await setSetting(SETTING_KEYS.BUSINESS_LOGO, "");
+  if (prev) {
+    const prevPath = publicUrlToPath(prev, LOGO_BUCKET);
+    if (prevPath) await removeFromBucket(LOGO_BUCKET, prevPath);
+  }
   revalidateBranding();
   return ok(undefined);
 }
@@ -281,6 +323,16 @@ export async function setPaymentMethodActive(
 ): Promise<ActionResult> {
   await requireUser();
   await db.update(paymentMethods).set({ isActive }).where(eq(paymentMethods.id, id));
+  revalidateSettings();
+  return ok(undefined);
+}
+
+export async function setPaymentMethodRequiresReceipt(
+  id: string,
+  requiresReceipt: boolean,
+): Promise<ActionResult> {
+  await requireUser();
+  await db.update(paymentMethods).set({ requiresReceipt }).where(eq(paymentMethods.id, id));
   revalidateSettings();
   return ok(undefined);
 }

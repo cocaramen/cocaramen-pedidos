@@ -107,6 +107,8 @@ export const paymentMethods = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
+    // When true, orders with this method can attach a payment receipt (e.g. transfer).
+    requiresReceipt: boolean("requires_receipt").notNull().default(false),
     isActive: boolean("is_active").notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),
     ...timestamps,
@@ -186,6 +188,8 @@ export const orders = pgTable(
     internalNotes: text("internal_notes"),
     // Optional per-order delivery tracking link (used in customer messages).
     trackingUrl: text("tracking_url"),
+    // Payment receipt (transfer): private Storage path, or a data URI fallback.
+    transferReceiptPath: text("transfer_receipt_path"),
     deliveryDate: date("delivery_date").notNull(),
     deliverySlotId: uuid("delivery_slot_id")
       .notNull()

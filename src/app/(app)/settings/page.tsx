@@ -11,6 +11,7 @@ import {
   createPaymentMethod,
   updatePaymentMethod,
   setPaymentMethodActive,
+  setPaymentMethodRequiresReceipt,
   createShippingMethod,
   updateShippingMethod,
   setShippingMethodActive,
@@ -118,6 +119,13 @@ export default async function SettingsPage() {
             createAction={createPaymentMethod}
             updateAction={updatePaymentMethod}
             toggleAction={setPaymentMethodActive}
+            extraToggle={{
+              label: "Pide comprobante",
+              field: "requiresReceipt",
+              action: setPaymentMethodRequiresReceipt,
+              onLabel: "Pide comprobante",
+              offLabel: "Sin comprobante",
+            }}
           />
         </TabsContent>
 

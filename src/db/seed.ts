@@ -24,7 +24,7 @@ const VOLUME_DISCOUNTS = [
 
 const PAYMENT_METHODS = [
   { name: "Efectivo", sortOrder: 1 },
-  { name: "Transferencia", sortOrder: 2 },
+  { name: "Transferencia", sortOrder: 2, requiresReceipt: true },
 ];
 
 const SHIPPING_METHODS = [

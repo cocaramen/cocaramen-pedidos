@@ -222,6 +222,15 @@ export const brandingLogoSchema = z.object({
     .max(700_000, "El logo es demasiado grande."),
 });
 
+export const receiptImageSchema = z.object({
+  // Compressed client-side (WebP). data:image/...;base64,...
+  image: z
+    .string()
+    .trim()
+    .regex(/^data:image\/(png|jpeg|webp);base64,/, "Imagen inválida.")
+    .max(1_500_000, "La imagen es demasiado grande."),
+});
+
 export const messageTemplateSchema = z.object({
   status: z.enum(ORDER_STATUSES as [string, ...string[]]),
   body: z.string().trim().min(1, "El mensaje no puede estar vacío.").max(4000),

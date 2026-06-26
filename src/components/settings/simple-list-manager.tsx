@@ -52,6 +52,15 @@ interface Input {
   sortOrder: number;
 }
 
+/** Optional extra boolean column with its own inline switch. */
+interface ExtraToggle {
+  label: string;
+  field: string;
+  action: (id: string, value: boolean) => Promise<ActionResult>;
+  onLabel?: string;
+  offLabel?: string;
+}
+
 interface Props {
   title: string;
   description: string;
@@ -59,10 +68,11 @@ interface Props {
   emptyLabel: string;
   namePlaceholder: string;
   noun: string; // e.g. "forma de pago" — used in toasts
-  items: SimpleItem[];
+  items: (SimpleItem & Record<string, unknown>)[];
   createAction: (input: Input) => Promise<ActionResult<{ id: string }>>;
   updateAction: (id: string, input: Partial<Input>) => Promise<ActionResult>;
   toggleAction: (id: string, isActive: boolean) => Promise<ActionResult>;
+  extraToggle?: ExtraToggle;
 }
 
 export function SimpleListManager({
@@ -76,10 +86,27 @@ export function SimpleListManager({
   createAction,
   updateAction,
   toggleAction,
+  extraToggle,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [extraId, setExtraId] = useState<string | null>(null);
+
+  function onToggleExtra(id: string, value: boolean) {
+    if (!extraToggle) return;
+    setExtraId(id);
+    startTransition(async () => {
+      const result = await extraToggle.action(id, value);
+      setExtraId(null);
+      if (result.ok) {
+        toast.success(value ? (extraToggle.onLabel ?? "Activado") : (extraToggle.offLabel ?? "Desactivado"));
+        router.refresh();
+        return;
+      }
+      toast.error(result.error);
+    });
+  }
 
   const sorted = useMemo(
     () =>
@@ -129,6 +156,9 @@ export function SimpleListManager({
           <TableHeader>
             <TableRow>
               <TableHead>Nombre</TableHead>
+              {extraToggle && (
+                <TableHead className="text-center">{extraToggle.label}</TableHead>
+              )}
               <TableHead className="w-24 text-center">Orden</TableHead>
               <TableHead className="w-24 text-center">Activo</TableHead>
               <TableHead className="w-20 text-right">Acciones</TableHead>
@@ -137,7 +167,10 @@ export function SimpleListManager({
           <TableBody>
             {sorted.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">
+                <TableCell
+                  colSpan={extraToggle ? 5 : 4}
+                  className="text-center text-sm text-muted-foreground"
+                >
                   {emptyLabel}
                 </TableCell>
               </TableRow>
@@ -150,6 +183,16 @@ export function SimpleListManager({
                     {!item.isActive && <Badge variant="secondary">Inactivo</Badge>}
                   </span>
                 </TableCell>
+                {extraToggle && (
+                  <TableCell className="text-center">
+                    <Switch
+                      checked={Boolean(item[extraToggle.field])}
+                      disabled={pending && extraId === item.id}
+                      onCheckedChange={(v) => onToggleExtra(item.id, v)}
+                      aria-label={extraToggle.label}
+                    />
+                  </TableCell>
+                )}
                 <TableCell className="text-center tabular-nums">{item.sortOrder}</TableCell>
                 <TableCell className="text-center">
                   <Switch

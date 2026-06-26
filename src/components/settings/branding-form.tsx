@@ -22,32 +22,7 @@ import {
   updateBrandingLogo,
   clearBrandingLogo,
 } from "@/server/actions/settings";
-
-/** Read an image file and return a square-ish PNG data URI scaled to <= max px. */
-function fileToResizedDataUrl(file: File, max = 256): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("read error"));
-    reader.onload = () => {
-      const img = new window.Image();
-      img.onerror = () => reject(new Error("image error"));
-      img.onload = () => {
-        const scale = Math.min(1, max / Math.max(img.width, img.height));
-        const w = Math.max(1, Math.round(img.width * scale));
-        const h = Math.max(1, Math.round(img.height * scale));
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return reject(new Error("no canvas"));
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/png"));
-      };
-      img.src = reader.result as string;
-    };
-    reader.readAsDataURL(file);
-  });
-}
+import { compressImage } from "@/lib/image-compress";
 
 export function BrandingForm({ branding }: { branding: Branding }) {
   const router = useRouter();
@@ -86,7 +61,8 @@ export function BrandingForm({ branding }: { branding: Branding }) {
     }
     setUploading(true);
     try {
-      const dataUrl = await fileToResizedDataUrl(file);
+      // Logo is shown small; 256px WebP is sharp on retina and tiny in size.
+      const dataUrl = await compressImage(file, { maxDim: 256, quality: 0.9 });
       const result = await updateBrandingLogo({ logo: dataUrl });
       if (result.ok) {
         setLogo(dataUrl);
