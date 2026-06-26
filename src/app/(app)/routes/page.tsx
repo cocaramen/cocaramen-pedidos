@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { MapPin, Navigation, ExternalLink, Soup, AlertTriangle, Settings } from "lucide-react";
-import { getActiveSlots, getOrdersForRouting } from "@/server/queries";
+import {
+  getActiveSlots,
+  getOrdersForRouting,
+  getActiveShippingMethods,
+  getDeliveryRuns,
+} from "@/server/queries";
 import { getSettings } from "@/server/settings";
 import { optimizeRoute, type RouteStop } from "@/server/route-service";
 import { googleMapsDirUrl, formatDistance, formatDuration } from "@/lib/route";
@@ -8,6 +13,7 @@ import { nextDeliveryDate, formatLongDate } from "@/lib/dates";
 import { PageHeader } from "@/components/page-header";
 import { RouteControls } from "@/components/routes/route-controls";
 import { RouteMap } from "@/components/routes/route-map";
+import { RunCostsEditor, type RunRow } from "@/components/routes/run-costs-editor";
 import { StatusBadge } from "@/components/orders/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,7 +80,25 @@ export default async function RoutesPage({ searchParams }: { searchParams: Searc
     );
   }
 
-  const orders = selected.length ? await getOrdersForRouting(date, selected) : [];
+  const [orders, shippingMethods, runs] = await Promise.all([
+    selected.length ? getOrdersForRouting(date, selected) : Promise.resolve([]),
+    getActiveShippingMethods(),
+    getDeliveryRuns(date, selected),
+  ]);
+  const runBySlot = new Map(runs.map((r) => [r.slotId, r]));
+  const runRows: RunRow[] = activeSlots
+    .filter((s) => selected.includes(s.id))
+    .map((s) => {
+      const run = runBySlot.get(s.id);
+      return {
+        slotId: s.id,
+        label: s.label,
+        defaultCostCents: s.shippingCostCents,
+        shippingMethodId: run?.shippingMethodId ?? null,
+        actualCostCents: run?.actualCostCents ?? 0,
+        hasRun: Boolean(run),
+      };
+    });
   const withCoords = orders.filter((o) => o.latitude != null && o.longitude != null);
   const withoutCoords = orders.filter((o) => o.latitude == null || o.longitude == null);
 
@@ -118,6 +142,10 @@ export default async function RoutesPage({ searchParams }: { searchParams: Searc
           />
         </CardContent>
       </Card>
+
+      {runRows.length > 0 && (
+        <RunCostsEditor date={date} rows={runRows} shippingMethods={shippingMethods} />
+      )}
 
       {selected.length === 0 ? (
         <Card>

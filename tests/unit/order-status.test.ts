@@ -24,10 +24,11 @@ describe("order status state machine", () => {
     expect(canTransition("delivered", "delivered")).toBe(true);
   });
 
-  it("rejects illegal jumps", () => {
-    expect(canTransition("pending", "delivered")).toBe(false);
-    expect(canTransition("delivered", "pending")).toBe(false);
-    expect(canTransition("cancelled", "delivered")).toBe(false);
+  it("allows operators to move freely between any statuses (full control)", () => {
+    expect(canTransition("preparing", "pending")).toBe(true);
+    expect(canTransition("pending", "delivered")).toBe(true);
+    expect(canTransition("delivered", "pending")).toBe(true);
+    expect(canTransition("cancelled", "delivered")).toBe(true);
   });
 
   it("allows reopening a cancelled order to pending", () => {

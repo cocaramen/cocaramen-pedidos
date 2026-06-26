@@ -22,7 +22,7 @@ suite("capacity calculations against a real database", () => {
   let db: ReturnType<typeof drizzle<typeof schema>>;
   let slotId: string;
   let otherSlotId: string;
-  let brothId: string;
+  let productId: string;
   const date = "2099-01-01"; // far-future date to avoid colliding with seed/usage
   const createdOrderIds: string[] = [];
 
@@ -60,7 +60,7 @@ suite("capacity calculations against a real database", () => {
       .returning({ id: schema.orders.id });
     await db
       .insert(schema.orderItems)
-      .values({ orderId: o.id, brothTypeId: brothId, quantity: qty });
+      .values({ orderId: o.id, productId: productId, quantity: qty });
     createdOrderIds.push(o.id);
     return o.id;
   }
@@ -91,14 +91,14 @@ suite("capacity calculations against a real database", () => {
         sortOrder: 901,
       })
       .returning({ id: schema.deliverySlots.id });
-    const [broth] = await db
-      .insert(schema.brothTypes)
-      .values({ name: `TEST-Broth-${Date.now()}`, sortOrder: 900 })
-      .returning({ id: schema.brothTypes.id });
+    const [product] = await db
+      .insert(schema.products)
+      .values({ name: `TEST-Product-${Date.now()}`, sortOrder: 900 })
+      .returning({ id: schema.products.id });
 
     slotId = slotA.id;
     otherSlotId = slotB.id;
-    brothId = broth.id;
+    productId = product.id;
   });
 
   afterAll(async () => {
@@ -108,7 +108,7 @@ suite("capacity calculations against a real database", () => {
     }
     await db.delete(schema.deliverySlots).where(eq(schema.deliverySlots.id, slotId));
     await db.delete(schema.deliverySlots).where(eq(schema.deliverySlots.id, otherSlotId));
-    await db.delete(schema.brothTypes).where(eq(schema.brothTypes.id, brothId));
+    await db.delete(schema.products).where(eq(schema.products.id, productId));
     await client.end();
   });
 

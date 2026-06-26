@@ -70,3 +70,45 @@ export function nextDeliveryDate(activeDays: string[], now: Date = new Date()): 
 export function trimTime(t: string): string {
   return t.slice(0, 5);
 }
+
+// Argentina is UTC-3 year-round (no DST).
+const AR_OFFSET = "-03:00";
+
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(":");
+  return Number(h) * 60 + Number(m);
+}
+
+/**
+ * The instant a delivery day's work ends — used as the expiry for the public
+ * order link. Late-night slots whose end falls before noon (e.g. 00:00, 01:00)
+ * belong to the early morning of the *next* calendar day, so the working day
+ * can end past midnight (Fri 21–01 → Sat 01:00). Times are Argentina local.
+ */
+export function workingDayEnd(isoDate: string, slots: { endTime: string }[]): Date {
+  let maxMinutes = 0;
+  for (const s of slots) {
+    const end = timeToMinutes(s.endTime);
+    const adjusted = end < 12 * 60 ? end + 24 * 60 : end; // before noon → next day
+    if (adjusted > maxMinutes) maxMinutes = adjusted;
+  }
+  if (maxMinutes === 0) maxMinutes = 24 * 60; // no slots → midnight next day
+
+  const dayOffset = Math.floor(maxMinutes / (24 * 60));
+  const minutesInDay = maxMinutes % (24 * 60);
+  const base = parseISO(isoDate);
+  base.setDate(base.getDate() + dayOffset);
+  const dateStr = format(base, "yyyy-MM-dd");
+  const hh = String(Math.floor(minutesInDay / 60)).padStart(2, "0");
+  const mm = String(minutesInDay % 60).padStart(2, "0");
+  return new Date(`${dateStr}T${hh}:${mm}:00${AR_OFFSET}`);
+}
+
+/** True when `now` is past the working-day end of the delivery date. */
+export function isPublicLinkExpired(
+  isoDate: string,
+  slots: { endTime: string }[],
+  now: Date = new Date(),
+): boolean {
+  return now.getTime() > workingDayEnd(isoDate, slots).getTime();
+}

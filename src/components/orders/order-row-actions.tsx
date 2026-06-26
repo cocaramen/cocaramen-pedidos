@@ -3,7 +3,15 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MoreHorizontal, Pencil, Copy, Trash2, Loader2 } from "lucide-react";
+import {
+  MoreHorizontal,
+  Pencil,
+  Copy,
+  Trash2,
+  Loader2,
+  MessageSquare,
+  Link2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -25,10 +33,25 @@ import {
 import { useState } from "react";
 import { deleteOrder, duplicateOrder } from "@/server/actions/orders";
 
-export function OrderRowActions({ orderId }: { orderId: string }) {
+export function OrderRowActions({
+  orderId,
+  publicUrl,
+}: {
+  orderId: string;
+  publicUrl: string;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  async function onCopyLink() {
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      toast.success("Enlace copiado");
+    } catch {
+      toast.error("No se pudo copiar el enlace.");
+    }
+  }
 
   function onDuplicate() {
     startTransition(async () => {
@@ -69,6 +92,15 @@ export function OrderRowActions({ orderId }: { orderId: string }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => router.push(`/orders/${orderId}/message`)}>
+            <MessageSquare className="mr-2 h-4 w-4" />
+            Mensajes para el cliente
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onCopyLink()}>
+            <Link2 className="mr-2 h-4 w-4" />
+            Copiar enlace
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => router.push(`/orders/${orderId}/edit`)}>
             <Pencil className="mr-2 h-4 w-4" />
             Editar

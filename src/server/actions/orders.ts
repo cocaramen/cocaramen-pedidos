@@ -1,10 +1,17 @@
 "use server";
 
 import { db } from "@/db";
-import { orders, orderItems, deliverySlots, brothTypes } from "@/db/schema";
+import {
+  orders,
+  orderItems,
+  deliverySlots,
+  products,
+  paymentMethods,
+  shippingMethods,
+} from "@/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { createOrderSchema, updateOrderSchema } from "@/lib/validation";
+import { createOrderSchema, updateOrderSchema, type OrderInput } from "@/lib/validation";
 import { evaluateCapacity, sumBowls } from "@/lib/capacity";
 import { buildCapacitySnapshot } from "@/server/capacity-service";
 import { canTransition, isValidStatus } from "@/lib/order-status";
@@ -17,20 +24,45 @@ function normalizeNotes(value?: string | null): string | null {
   return v.length ? v : null;
 }
 
-/** Validate that referenced slot + broth types exist and are usable. */
-async function validateReferences(
-  slotId: string,
-  brothTypeIds: string[],
-): Promise<string | null> {
-  const [slot, broths] = await Promise.all([
-    db.query.deliverySlots.findFirst({ where: eq(deliverySlots.id, slotId) }),
-    db.query.brothTypes.findMany({ where: inArray(brothTypes.id, brothTypeIds) }),
+/** Validate that the slot, products, and payment/shipping methods exist. */
+async function validateReferences(data: OrderInput): Promise<string | null> {
+  const productIds = data.items.map((i) => i.productId);
+  const [slot, rows, payment, shipping] = await Promise.all([
+    db.query.deliverySlots.findFirst({ where: eq(deliverySlots.id, data.deliverySlotId) }),
+    db.query.products.findMany({ where: inArray(products.id, productIds) }),
+    data.paymentMethodId
+      ? db.query.paymentMethods.findFirst({
+          where: eq(paymentMethods.id, data.paymentMethodId),
+        })
+      : Promise.resolve(undefined),
+    data.fulfillmentType === "delivery" && data.shippingMethodId
+      ? db.query.shippingMethods.findFirst({
+          where: eq(shippingMethods.id, data.shippingMethodId),
+        })
+      : Promise.resolve(undefined),
   ]);
   if (!slot) return "La franja horaria seleccionada no existe.";
-  if (broths.length !== new Set(brothTypeIds).size) {
-    return "Uno o más tipos de caldo no existen.";
+  if (rows.length !== new Set(productIds).size) {
+    return "Uno o más productos no existen.";
+  }
+  if (data.paymentMethodId && !payment) return "La forma de pago no existe.";
+  if (data.fulfillmentType === "delivery" && data.shippingMethodId && !shipping) {
+    return "La forma de envío no existe.";
   }
   return null;
+}
+
+/** Pickup orders carry no address/coords/shipping method. */
+function fulfillmentFields(data: OrderInput) {
+  const isPickup = data.fulfillmentType === "pickup";
+  return {
+    fulfillmentType: data.fulfillmentType,
+    paymentMethodId: data.paymentMethodId ?? null,
+    customerAddress: isPickup ? "" : (data.customerAddress ?? "").trim(),
+    latitude: isPickup ? null : (data.latitude ?? null),
+    longitude: isPickup ? null : (data.longitude ?? null),
+    shippingMethodId: isPickup ? null : (data.shippingMethodId ?? null),
+  };
 }
 
 export async function createOrder(input: unknown): Promise<ActionResult<{ id: string }>> {
@@ -44,10 +76,7 @@ export async function createOrder(input: unknown): Promise<ActionResult<{ id: st
   }
   const data = parsed.data;
 
-  const refError = await validateReferences(
-    data.deliverySlotId,
-    data.items.map((i) => i.brothTypeId),
-  );
+  const refError = await validateReferences(data);
   if (refError) return fail(refError);
 
   const totalBowls = sumBowls(data.items);
@@ -70,11 +99,10 @@ export async function createOrder(input: unknown): Promise<ActionResult<{ id: st
       .values({
         customerName: data.customerName,
         customerPhone: data.customerPhone,
-        customerAddress: data.customerAddress,
-        latitude: data.latitude ?? null,
-        longitude: data.longitude ?? null,
+        ...fulfillmentFields(data),
         customerNotes: normalizeNotes(data.customerNotes),
         internalNotes: normalizeNotes(data.internalNotes),
+        trackingUrl: normalizeNotes(data.trackingUrl),
         deliveryDate: data.deliveryDate,
         deliverySlotId: data.deliverySlotId,
         status: (data.status as OrderStatus) ?? "pending",
@@ -89,7 +117,7 @@ export async function createOrder(input: unknown): Promise<ActionResult<{ id: st
     await tx.insert(orderItems).values(
       data.items.map((i) => ({
         orderId: created.id,
-        brothTypeId: i.brothTypeId,
+        productId: i.productId,
         quantity: i.quantity,
       })),
     );
@@ -118,10 +146,7 @@ export async function updateOrder(
   }
   const data = parsed.data;
 
-  const refError = await validateReferences(
-    data.deliverySlotId,
-    data.items.map((i) => i.brothTypeId),
-  );
+  const refError = await validateReferences(data);
   if (refError) return fail(refError);
 
   const totalBowls = sumBowls(data.items);
@@ -153,11 +178,10 @@ export async function updateOrder(
       .set({
         customerName: data.customerName,
         customerPhone: data.customerPhone,
-        customerAddress: data.customerAddress,
-        latitude: data.latitude ?? null,
-        longitude: data.longitude ?? null,
+        ...fulfillmentFields(data),
         customerNotes: normalizeNotes(data.customerNotes),
         internalNotes: normalizeNotes(data.internalNotes),
+        trackingUrl: normalizeNotes(data.trackingUrl),
         deliveryDate: data.deliveryDate,
         deliverySlotId: data.deliverySlotId,
         status: nextStatus,
@@ -176,7 +200,7 @@ export async function updateOrder(
     await tx.insert(orderItems).values(
       data.items.map((i) => ({
         orderId: id,
-        brothTypeId: i.brothTypeId,
+        productId: i.productId,
         quantity: i.quantity,
       })),
     );
@@ -238,8 +262,14 @@ export async function duplicateOrder(id: string): Promise<ActionResult<{ id: str
         customerName: source.customerName,
         customerPhone: source.customerPhone,
         customerAddress: source.customerAddress,
+        latitude: source.latitude,
+        longitude: source.longitude,
+        fulfillmentType: source.fulfillmentType,
+        paymentMethodId: source.paymentMethodId,
+        shippingMethodId: source.shippingMethodId,
         customerNotes: source.customerNotes,
         internalNotes: source.internalNotes,
+        trackingUrl: source.trackingUrl,
         deliveryDate: source.deliveryDate,
         deliverySlotId: source.deliverySlotId,
         status: "pending",
@@ -254,7 +284,7 @@ export async function duplicateOrder(id: string): Promise<ActionResult<{ id: str
       await tx.insert(orderItems).values(
         source.items.map((i) => ({
           orderId: created.id,
-          brothTypeId: i.brothTypeId,
+          productId: i.productId,
           quantity: i.quantity,
         })),
       );

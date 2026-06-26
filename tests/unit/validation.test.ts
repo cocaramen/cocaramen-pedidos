@@ -7,7 +7,7 @@ const validOrder = {
   customerAddress: "Calle Mayor 1, Madrid",
   deliveryDate: "2026-06-26",
   deliverySlotId: "11111111-1111-1111-1111-111111111111",
-  items: [{ brothTypeId: "22222222-2222-2222-2222-222222222222", quantity: 2 }],
+  items: [{ productId: "22222222-2222-2222-2222-222222222222", quantity: 2 }],
 };
 
 describe("createOrderSchema", () => {
@@ -26,15 +26,33 @@ describe("createOrderSchema", () => {
     expect(r.success).toBe(false);
   });
 
-  it("rejects duplicate broth types", () => {
+  it("rejects duplicate products", () => {
     const r = createOrderSchema.safeParse({
       ...validOrder,
       items: [
-        { brothTypeId: "22222222-2222-2222-2222-222222222222", quantity: 1 },
-        { brothTypeId: "22222222-2222-2222-2222-222222222222", quantity: 1 },
+        { productId: "22222222-2222-2222-2222-222222222222", quantity: 1 },
+        { productId: "22222222-2222-2222-2222-222222222222", quantity: 1 },
       ],
     });
     expect(r.success).toBe(false);
+  });
+
+  it("requires an address for delivery orders", () => {
+    const r = createOrderSchema.safeParse({
+      ...validOrder,
+      fulfillmentType: "delivery",
+      customerAddress: "",
+    });
+    expect(r.success).toBe(false);
+  });
+
+  it("allows an empty address for pickup orders", () => {
+    const r = createOrderSchema.safeParse({
+      ...validOrder,
+      fulfillmentType: "pickup",
+      customerAddress: "",
+    });
+    expect(r.success).toBe(true);
   });
 
   it("rejects an invalid date format", () => {
@@ -45,7 +63,7 @@ describe("createOrderSchema", () => {
   it("rejects quantity below 1", () => {
     const r = createOrderSchema.safeParse({
       ...validOrder,
-      items: [{ brothTypeId: "22222222-2222-2222-2222-222222222222", quantity: 0 }],
+      items: [{ productId: "22222222-2222-2222-2222-222222222222", quantity: 0 }],
     });
     expect(r.success).toBe(false);
   });

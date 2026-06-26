@@ -1,4 +1,41 @@
 import { describe, it, expect } from "vitest";
+import { workingDayEnd, isPublicLinkExpired } from "@/lib/dates";
+
+const NIGHT_SLOTS = [
+  { endTime: "22:00:00" },
+  { endTime: "23:00:00" },
+  { endTime: "00:00:00" },
+  { endTime: "01:00:00" },
+];
+
+describe("workingDayEnd", () => {
+  it("ends late-night ops at 01:00 the following day (AR time)", () => {
+    // Fri 2026-06-26 night → Sat 2026-06-27 01:00 AR = 04:00 UTC
+    expect(workingDayEnd("2026-06-26", NIGHT_SLOTS).toISOString()).toBe(
+      "2026-06-27T04:00:00.000Z",
+    );
+  });
+
+  it("ends a daytime slot the same day", () => {
+    // 13:00 AR = 16:00 UTC, same day
+    expect(workingDayEnd("2026-06-26", [{ endTime: "13:00:00" }]).toISOString()).toBe(
+      "2026-06-26T16:00:00.000Z",
+    );
+  });
+});
+
+describe("isPublicLinkExpired", () => {
+  it("is not expired before the working day ends", () => {
+    const now = new Date("2026-06-27T03:59:00.000Z"); // 00:59 AR Sat
+    expect(isPublicLinkExpired("2026-06-26", NIGHT_SLOTS, now)).toBe(false);
+  });
+
+  it("is expired after the working day ends", () => {
+    const now = new Date("2026-06-27T04:30:00.000Z"); // 01:30 AR Sat
+    expect(isPublicLinkExpired("2026-06-26", NIGHT_SLOTS, now)).toBe(true);
+  });
+});
+
 import {
   weekdayKey,
   isActiveDeliveryDay,

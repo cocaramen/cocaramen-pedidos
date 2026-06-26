@@ -1,21 +1,79 @@
 import "server-only";
 import { db } from "@/db";
-import { orders, orderItems, deliverySlots, brothTypes } from "@/db/schema";
+import {
+  orders,
+  orderItems,
+  deliverySlots,
+  products,
+  volumeDiscounts,
+  messageTemplates,
+  paymentMethods,
+  shippingMethods,
+  deliveryRuns,
+} from "@/db/schema";
 import { and, asc, desc, eq, ilike, inArray, ne, or, sql, type SQL } from "drizzle-orm";
 import { getSettings } from "./settings";
+import { DEFAULT_TEMPLATES } from "@/lib/messages";
 import type { OrderStatus } from "@/db/schema";
 
+/** Saved message templates merged over the built-in defaults (per status). */
+export async function getMessageTemplates(): Promise<Record<OrderStatus, string>> {
+  const rows = await db.query.messageTemplates.findMany();
+  const map: Record<OrderStatus, string> = { ...DEFAULT_TEMPLATES };
+  for (const r of rows) map[r.status] = r.body;
+  return map;
+}
+
 // ── Reference data ─────────────────────────────────────────────
-export async function getActiveBrothTypes() {
-  return db.query.brothTypes.findMany({
-    where: eq(brothTypes.isActive, true),
-    orderBy: [asc(brothTypes.sortOrder), asc(brothTypes.name)],
+export async function getActiveProducts() {
+  return db.query.products.findMany({
+    where: eq(products.isActive, true),
+    orderBy: [asc(products.sortOrder), asc(products.name)],
   });
 }
 
-export async function getAllBrothTypes() {
-  return db.query.brothTypes.findMany({
-    orderBy: [asc(brothTypes.sortOrder), asc(brothTypes.name)],
+export async function getAllProducts() {
+  return db.query.products.findMany({
+    orderBy: [asc(products.sortOrder), asc(products.name)],
+  });
+}
+
+export async function getActiveVolumeDiscounts() {
+  return db.query.volumeDiscounts.findMany({
+    where: eq(volumeDiscounts.isActive, true),
+    orderBy: [asc(volumeDiscounts.category), asc(volumeDiscounts.minQuantity)],
+  });
+}
+
+export async function getAllVolumeDiscounts() {
+  return db.query.volumeDiscounts.findMany({
+    orderBy: [asc(volumeDiscounts.category), asc(volumeDiscounts.minQuantity)],
+  });
+}
+
+export async function getActivePaymentMethods() {
+  return db.query.paymentMethods.findMany({
+    where: eq(paymentMethods.isActive, true),
+    orderBy: [asc(paymentMethods.sortOrder), asc(paymentMethods.name)],
+  });
+}
+
+export async function getAllPaymentMethods() {
+  return db.query.paymentMethods.findMany({
+    orderBy: [asc(paymentMethods.sortOrder), asc(paymentMethods.name)],
+  });
+}
+
+export async function getActiveShippingMethods() {
+  return db.query.shippingMethods.findMany({
+    where: eq(shippingMethods.isActive, true),
+    orderBy: [asc(shippingMethods.sortOrder), asc(shippingMethods.name)],
+  });
+}
+
+export async function getAllShippingMethods() {
+  return db.query.shippingMethods.findMany({
+    orderBy: [asc(shippingMethods.sortOrder), asc(shippingMethods.name)],
   });
 }
 
@@ -38,7 +96,22 @@ export async function getOrderById(id: string) {
     where: eq(orders.id, id),
     with: {
       slot: true,
-      items: { with: { brothType: true } },
+      paymentMethod: true,
+      shippingMethod: true,
+      items: { with: { product: true } },
+    },
+  });
+}
+
+// ── Public order page (no auth) ────────────────────────────────
+export async function getOrderByPublicToken(token: string) {
+  return db.query.orders.findFirst({
+    where: eq(orders.publicToken, token),
+    with: {
+      slot: true,
+      paymentMethod: true,
+      shippingMethod: true,
+      items: { with: { product: true } },
     },
   });
 }
@@ -82,9 +155,20 @@ export async function listOrders(filters: OrderListFilters) {
     orderBy,
     with: {
       slot: true,
-      items: { with: { brothType: true } },
+      items: { with: { product: true } },
     },
     limit: 500,
+  });
+}
+
+/** Recorded actual shipping costs for a date + set of slots. */
+export async function getDeliveryRuns(date: string, slotIds: string[]) {
+  if (!slotIds.length) return [];
+  return db.query.deliveryRuns.findMany({
+    where: and(
+      eq(deliveryRuns.deliveryDate, date),
+      inArray(deliveryRuns.slotId, slotIds),
+    ),
   });
 }
 
@@ -102,6 +186,8 @@ export async function getOrdersForRouting(date: string, slotIds: string[]) {
   const conditions: SQL[] = [
     eq(orders.deliveryDate, date),
     inArray(orders.status, ROUTABLE_STATUSES),
+    // Pickup orders are collected at the shop — never part of a delivery route.
+    eq(orders.fulfillmentType, "delivery"),
   ];
   if (slotIds.length) {
     const clause = inArray(orders.deliverySlotId, slotIds);

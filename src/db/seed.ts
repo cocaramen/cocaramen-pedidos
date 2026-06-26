@@ -7,11 +7,31 @@ import { sql } from "drizzle-orm";
 import * as schema from "./schema";
 import { SETTING_KEYS } from "./schema";
 
-const BROTH_TYPES = [
-  { name: "Caldo de Pollo", sortOrder: 1 },
-  { name: "Caldo de Pollo Picante", sortOrder: 2 },
-  { name: "Caldo de Carne", sortOrder: 3 },
-  { name: "Caldo de Carne Picante", sortOrder: 4 },
+// priceCents = ARS centavos (e.g. 1200000 = $12.000). Set on insert only.
+const PRODUCTS = [
+  { name: "Caldo de Pollo", category: "Ramen", priceCents: 1200000, sortOrder: 1 },
+  { name: "Caldo de Pollo Picante", category: "Ramen", priceCents: 1200000, sortOrder: 2 },
+  { name: "Caldo de Carne", category: "Ramen", priceCents: 1300000, sortOrder: 3 },
+  { name: "Caldo de Carne Picante", category: "Ramen", priceCents: 1300000, sortOrder: 4 },
+];
+
+// Volume discounts: "from N units of a category, X% off". discountBps = basis
+// points (625 = 6.25%). Example offers; edit/disable in Settings.
+const VOLUME_DISCOUNTS = [
+  { category: "Ramen", minQuantity: 2, discountBps: 625 },
+  { category: "Ramen", minQuantity: 4, discountBps: 940 },
+];
+
+const PAYMENT_METHODS = [
+  { name: "Efectivo", sortOrder: 1 },
+  { name: "Transferencia", sortOrder: 2 },
+];
+
+const SHIPPING_METHODS = [
+  { name: "Vehículo de Pablo", sortOrder: 1 },
+  { name: "Vehículo propio", sortOrder: 2 },
+  { name: "PedidosYa", sortOrder: 3 },
+  { name: "Uber Envíos", sortOrder: 4 },
 ];
 
 const DELIVERY_SLOTS = [
@@ -54,20 +74,57 @@ async function main() {
   }
   console.log(`  • settings: ${SETTINGS.length} ensured`);
 
-  // Broth types — upsert by name, only set defaults on insert
+  // Products — upsert by name; only update sort/category on conflict so an
+  // operator-edited price is never overwritten on reseed.
   const slotCapacity = Number(
     SETTINGS.find((s) => s.key === SETTING_KEYS.DEFAULT_SLOT_CAPACITY)?.value ?? "6",
   );
-  for (const b of BROTH_TYPES) {
+  for (const p of PRODUCTS) {
     await db
-      .insert(schema.brothTypes)
-      .values(b)
+      .insert(schema.products)
+      .values(p)
       .onConflictDoUpdate({
-        target: schema.brothTypes.name,
-        set: { sortOrder: b.sortOrder },
+        target: schema.products.name,
+        set: { sortOrder: p.sortOrder, category: p.category },
       });
   }
-  console.log(`  • broth_types: ${BROTH_TYPES.length} ensured`);
+  console.log(`  • products: ${PRODUCTS.length} ensured`);
+
+  // Volume discounts — upsert by (category, minQuantity).
+  for (const d of VOLUME_DISCOUNTS) {
+    await db
+      .insert(schema.volumeDiscounts)
+      .values(d)
+      .onConflictDoUpdate({
+        target: [schema.volumeDiscounts.category, schema.volumeDiscounts.minQuantity],
+        set: { discountBps: d.discountBps },
+      });
+  }
+  console.log(`  • volume_discounts: ${VOLUME_DISCOUNTS.length} ensured`);
+
+  // Payment methods — upsert by name
+  for (const m of PAYMENT_METHODS) {
+    await db
+      .insert(schema.paymentMethods)
+      .values(m)
+      .onConflictDoUpdate({
+        target: schema.paymentMethods.name,
+        set: { sortOrder: m.sortOrder },
+      });
+  }
+  console.log(`  • payment_methods: ${PAYMENT_METHODS.length} ensured`);
+
+  // Shipping methods — upsert by name
+  for (const m of SHIPPING_METHODS) {
+    await db
+      .insert(schema.shippingMethods)
+      .values(m)
+      .onConflictDoUpdate({
+        target: schema.shippingMethods.name,
+        set: { sortOrder: m.sortOrder },
+      });
+  }
+  console.log(`  • shipping_methods: ${SHIPPING_METHODS.length} ensured`);
 
   // Delivery slots — upsert by label
   for (const slot of DELIVERY_SLOTS) {
@@ -86,9 +143,9 @@ async function main() {
   console.log(`  • delivery_slots: ${DELIVERY_SLOTS.length} ensured`);
 
   const [{ count }] = await db.execute<{ count: number }>(
-    sql`SELECT count(*)::int AS count FROM broth_types`,
+    sql`SELECT count(*)::int AS count FROM products`,
   );
-  console.log(`✅ Seed complete. (broth_types rows: ${count})`);
+  console.log(`✅ Seed complete. (products rows: ${count})`);
 
   await client.end();
 }

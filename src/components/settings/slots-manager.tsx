@@ -38,6 +38,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { trimTime } from "@/lib/dates";
+import { formatArs, pesosToCents, centsToPesosInput } from "@/lib/money";
 import type { DeliverySlot } from "@/db/schema";
 import { createSlot, updateSlot, setSlotActive } from "@/server/actions/settings";
 
@@ -98,6 +99,7 @@ export function SlotsManager({ slots }: Props) {
               <TableHead>Etiqueta</TableHead>
               <TableHead className="w-36">Horario</TableHead>
               <TableHead className="w-28 text-center">Capacidad</TableHead>
+              <TableHead className="w-32 text-right">Costo envío</TableHead>
               <TableHead className="w-24 text-center">Activa</TableHead>
               <TableHead className="w-20 text-right">Acciones</TableHead>
             </TableRow>
@@ -106,7 +108,7 @@ export function SlotsManager({ slots }: Props) {
             {sorted.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="text-center text-sm text-muted-foreground"
                 >
                   No hay franjas horarias. Cree la primera.
@@ -129,6 +131,9 @@ export function SlotsManager({ slots }: Props) {
                 </TableCell>
                 <TableCell className="text-center tabular-nums">
                   {slot.capacityLimit}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {formatArs(slot.shippingCostCents)}
                 </TableCell>
                 <TableCell className="text-center">
                   <Switch
@@ -179,6 +184,9 @@ function SlotDialog({
   const [capacityLimit, setCapacityLimit] = useState(
     String(slot?.capacityLimit ?? 6),
   );
+  const [shippingCost, setShippingCost] = useState(
+    centsToPesosInput(slot?.shippingCostCents ?? 0),
+  );
   const [sortOrder, setSortOrder] = useState(String(slot?.sortOrder ?? 0));
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
 
@@ -187,6 +195,7 @@ function SlotDialog({
     setStartTime(slot ? trimTime(slot.startTime) : "");
     setEndTime(slot ? trimTime(slot.endTime) : "");
     setCapacityLimit(String(slot?.capacityLimit ?? 6));
+    setShippingCost(centsToPesosInput(slot?.shippingCostCents ?? 0));
     setSortOrder(String(slot?.sortOrder ?? 0));
     setFieldErrors({});
   }
@@ -199,12 +208,14 @@ function SlotDialog({
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFieldErrors({});
+    const shippingCostCents = pesosToCents(shippingCost) ?? 0;
     startTransition(async () => {
       const payload = {
         label,
         startTime,
         endTime,
         capacityLimit: Number(capacityLimit),
+        shippingCostCents,
         sortOrder: Number(sortOrder),
       };
       const result =
@@ -298,6 +309,27 @@ function SlotDialog({
                 {err("capacityLimit") && (
                   <p className="text-sm font-medium text-destructive">
                     {err("capacityLimit")}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="slot-shipping-cost">Costo de envío (ARS)</Label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                    $
+                  </span>
+                  <Input
+                    id="slot-shipping-cost"
+                    inputMode="decimal"
+                    className="pl-7 tabular-nums"
+                    value={shippingCost}
+                    onChange={(e) => setShippingCost(e.target.value)}
+                    placeholder="2000"
+                  />
+                </div>
+                {err("shippingCostCents") && (
+                  <p className="text-sm font-medium text-destructive">
+                    {err("shippingCostCents")}
                   </p>
                 )}
               </div>

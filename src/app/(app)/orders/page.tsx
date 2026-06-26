@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { AlertTriangle, PlusCircle, Soup, ClipboardList } from "lucide-react";
 import { listOrders, getActiveSlots, type OrderListFilters } from "@/server/queries";
 import { isValidStatus } from "@/lib/order-status";
@@ -35,8 +36,8 @@ type SearchParams = Promise<{
   sort?: string;
 }>;
 
-function itemsSummary(items: { quantity: number; brothType: { name: string } }[]): string {
-  return items.map((i) => `${i.quantity}× ${i.brothType.name}`).join(", ");
+function itemsSummary(items: { quantity: number; product: { name: string } }[]): string {
+  return items.map((i) => `${i.quantity}× ${i.product.name}`).join(", ");
 }
 
 export default async function OrdersPage({
@@ -56,6 +57,11 @@ export default async function OrdersPage({
   };
 
   const [orders, slots] = await Promise.all([listOrders(filters), getActiveSlots()]);
+
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
+  const publicUrlFor = (token: string) => `${proto}://${host}/p/${token}`;
 
   return (
     <div className="space-y-6">
@@ -157,7 +163,7 @@ export default async function OrdersPage({
                       <StatusSelect orderId={o.id} status={o.status} />
                     </TableCell>
                     <TableCell>
-                      <OrderRowActions orderId={o.id} />
+                      <OrderRowActions orderId={o.id} publicUrl={publicUrlFor(o.publicToken)} />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -180,7 +186,7 @@ export default async function OrdersPage({
                       </Link>
                       <div className="text-xs text-muted-foreground">{o.customerPhone}</div>
                     </div>
-                    <OrderRowActions orderId={o.id} />
+                    <OrderRowActions orderId={o.id} publicUrl={publicUrlFor(o.publicToken)} />
                   </div>
                   <p className="text-sm text-muted-foreground">{o.customerAddress}</p>
                   <div className="flex flex-wrap items-center justify-between gap-2 text-sm">

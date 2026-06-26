@@ -30,22 +30,12 @@ export const STATUS_BADGE_CLASSES: Record<OrderStatus, string> = {
 };
 
 /**
- * Status state machine. Operators value speed, so transitions are permissive:
- * you may advance, step back one stage, or cancel any non-terminal order, and
- * reopen a cancelled order to pending.
+ * Operators run the kitchen and value full control, so any status can move to
+ * any other status (e.g. revert "en preparación" back to "pendiente", reopen a
+ * delivered/cancelled order). The status is still validated as a known value.
  */
-export const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  pending: ["confirmed", "preparing", "cancelled"],
-  confirmed: ["preparing", "pending", "cancelled"],
-  preparing: ["out_for_delivery", "confirmed", "cancelled"],
-  out_for_delivery: ["delivered", "preparing", "cancelled"],
-  delivered: ["out_for_delivery"],
-  cancelled: ["pending"],
-};
-
-export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
-  if (from === to) return true;
-  return ALLOWED_TRANSITIONS[from]?.includes(to) ?? false;
+export function canTransition(_from: OrderStatus, to: OrderStatus): boolean {
+  return isValidStatus(to);
 }
 
 export function isValidStatus(value: string): value is OrderStatus {

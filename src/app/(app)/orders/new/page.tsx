@@ -1,4 +1,10 @@
-import { getActiveBrothTypes, getActiveSlots } from "@/server/queries";
+import {
+  getActiveProducts,
+  getActiveSlots,
+  getActiveVolumeDiscounts,
+  getActivePaymentMethods,
+  getActiveShippingMethods,
+} from "@/server/queries";
 import { getSettings } from "@/server/settings";
 import { nextDeliveryDate } from "@/lib/dates";
 import { OrderForm } from "@/components/orders/order-form";
@@ -7,11 +13,15 @@ import { PageHeader } from "@/components/page-header";
 export const dynamic = "force-dynamic";
 
 export default async function NewOrderPage() {
-  const [brothTypes, slots, settings] = await Promise.all([
-    getActiveBrothTypes(),
-    getActiveSlots(),
-    getSettings(),
-  ]);
+  const [products, slots, volumeDiscounts, paymentMethods, shippingMethods, settings] =
+    await Promise.all([
+      getActiveProducts(),
+      getActiveSlots(),
+      getActiveVolumeDiscounts(),
+      getActivePaymentMethods(),
+      getActiveShippingMethods(),
+      getSettings(),
+    ]);
   const defaultDate = nextDeliveryDate(settings.activeDeliveryDays);
 
   return (
@@ -21,8 +31,11 @@ export default async function NewOrderPage() {
         description="Registre un pedido y revise la capacidad antes de confirmar."
       />
       <OrderForm
-        brothTypes={brothTypes}
+        products={products}
+        volumeDiscounts={volumeDiscounts}
         slots={slots}
+        paymentMethods={paymentMethods}
+        shippingMethods={shippingMethods}
         defaultDate={defaultDate}
         searchArea={{
           lat: settings.searchCenterLat,

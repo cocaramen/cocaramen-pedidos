@@ -3,6 +3,9 @@ import { updateSupabaseSession } from "@/lib/supabase/middleware";
 
 const SESSION_COOKIE = "ramen_session";
 const PUBLIC_PATHS = ["/login"];
+// Fully open, no-auth pages — accessible to anyone, with no auth redirects in
+// either direction (e.g. the public order page shared with customers).
+const OPEN_PATHS = ["/p/"];
 
 /**
  * Coarse route protection. Pages additionally call requireUser() for the
@@ -10,6 +13,12 @@ const PUBLIC_PATHS = ["/login"];
  */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Open pages bypass all auth logic (including the logged-in → "/" redirect).
+  if (OPEN_PATHS.some((p) => pathname.startsWith(p))) {
+    return NextResponse.next();
+  }
+
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
   const mode = process.env.AUTH_MODE === "supabase" ? "supabase" : "dev";
 

@@ -30,8 +30,18 @@ import {
 import { CapacityMeter } from "@/components/capacity-meter";
 import { AddressPicker, type SearchArea } from "@/components/orders/address-picker";
 import { cn } from "@/lib/utils";
-import type { BrothType, DeliverySlot, OrderStatus } from "@/db/schema";
+import type {
+  Product,
+  DeliverySlot,
+  OrderStatus,
+  VolumeDiscount,
+  PaymentMethod,
+  ShippingMethod,
+  FulfillmentType,
+} from "@/db/schema";
 import type { CapacityEvaluation } from "@/lib/capacity";
+import { priceOrder, type PricingItem } from "@/lib/pricing";
+import { formatArs } from "@/lib/money";
 import { STATUS_LABELS, ORDER_STATUSES } from "@/lib/order-status";
 import { trimTime } from "@/lib/dates";
 import { previewCapacity } from "@/server/actions/capacity";
@@ -46,21 +56,37 @@ export interface OrderFormInitial {
   longitude: number | null;
   customerNotes: string | null;
   internalNotes: string | null;
+  trackingUrl: string | null;
+  fulfillmentType: FulfillmentType;
+  paymentMethodId: string | null;
+  shippingMethodId: string | null;
   deliveryDate: string;
   deliverySlotId: string;
   status: OrderStatus;
-  items: { brothTypeId: string; quantity: number }[];
+  items: { productId: string; quantity: number }[];
 }
 
 interface Props {
-  brothTypes: BrothType[];
+  products: Product[];
+  volumeDiscounts: VolumeDiscount[];
   slots: DeliverySlot[];
+  paymentMethods: PaymentMethod[];
+  shippingMethods: ShippingMethod[];
   defaultDate: string;
   initial?: OrderFormInitial;
   searchArea?: SearchArea | null;
 }
 
-export function OrderForm({ brothTypes, slots, defaultDate, initial, searchArea }: Props) {
+export function OrderForm({
+  products,
+  volumeDiscounts,
+  slots,
+  paymentMethods,
+  shippingMethods,
+  defaultDate,
+  initial,
+  searchArea,
+}: Props) {
   const router = useRouter();
   const isEdit = Boolean(initial);
   const [pending, startTransition] = useTransition();
@@ -73,7 +99,18 @@ export function OrderForm({ brothTypes, slots, defaultDate, initial, searchArea 
   const [longitude, setLongitude] = useState<number | null>(initial?.longitude ?? null);
   const [customerNotes, setCustomerNotes] = useState(initial?.customerNotes ?? "");
   const [internalNotes, setInternalNotes] = useState(initial?.internalNotes ?? "");
+  const [trackingUrl, setTrackingUrl] = useState(initial?.trackingUrl ?? "");
+  const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>(
+    initial?.fulfillmentType ?? "delivery",
+  );
+  const [paymentMethodId, setPaymentMethodId] = useState(
+    initial?.paymentMethodId ?? paymentMethods[0]?.id ?? "",
+  );
+  const [shippingMethodId, setShippingMethodId] = useState(
+    initial?.shippingMethodId ?? "",
+  );
   const [deliveryDate, setDeliveryDate] = useState(initial?.deliveryDate ?? defaultDate);
+  const isPickup = fulfillmentType === "pickup";
   const [deliverySlotId, setDeliverySlotId] = useState(
     initial?.deliverySlotId ?? slots[0]?.id ?? "",
   );
@@ -81,7 +118,7 @@ export function OrderForm({ brothTypes, slots, defaultDate, initial, searchArea 
 
   const [quantities, setQuantities] = useState<Record<string, number>>(() => {
     const map: Record<string, number> = {};
-    initial?.items.forEach((i) => (map[i.brothTypeId] = i.quantity));
+    initial?.items.forEach((i) => (map[i.productId] = i.quantity));
     return map;
   });
 
@@ -93,10 +130,27 @@ export function OrderForm({ brothTypes, slots, defaultDate, initial, searchArea 
     () =>
       Object.entries(quantities)
         .filter(([, q]) => q > 0)
-        .map(([brothTypeId, quantity]) => ({ brothTypeId, quantity })),
+        .map(([productId, quantity]) => ({ productId, quantity })),
     [quantities],
   );
   const totalBowls = items.reduce((s, i) => s + i.quantity, 0);
+
+  // ── Live price summary (subtotal, volume discount, total) ──
+  const productById = useMemo(
+    () => new Map(products.map((p) => [p.id, p])),
+    [products],
+  );
+  const pricing = useMemo(() => {
+    const pricingItems: PricingItem[] = items
+      .map((i) => {
+        const p = productById.get(i.productId);
+        return p
+          ? { product: { priceCents: p.priceCents, category: p.category }, quantity: i.quantity }
+          : null;
+      })
+      .filter((x): x is PricingItem => x !== null);
+    return priceOrder(pricingItems, volumeDiscounts);
+  }, [items, productById, volumeDiscounts]);
 
   // ── Live capacity preview (debounced, server-authoritative) ──
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -138,6 +192,10 @@ export function OrderForm({ brothTypes, slots, defaultDate, initial, searchArea 
       longitude,
       customerNotes,
       internalNotes,
+      trackingUrl: isPickup ? "" : trackingUrl,
+      fulfillmentType,
+      paymentMethodId: paymentMethodId || null,
+      shippingMethodId: isPickup ? null : shippingMethodId || null,
       deliveryDate,
       deliverySlotId,
       status,
@@ -204,20 +262,26 @@ export function OrderForm({ brothTypes, slots, defaultDate, initial, searchArea 
                 inputMode="tel"
               />
             </Field>
-            <Field label="Dirección de entrega" required className="sm:col-span-2">
-              <AddressPicker
-                address={customerAddress}
-                onAddressChange={setCustomerAddress}
-                lat={latitude}
-                lng={longitude}
-                onCoordsChange={(la, lo) => {
-                  setLatitude(la);
-                  setLongitude(lo);
-                }}
-                error={err("customerAddress")}
-                searchArea={searchArea}
-              />
-            </Field>
+            {!isPickup ? (
+              <Field label="Dirección de entrega" required className="sm:col-span-2">
+                <AddressPicker
+                  address={customerAddress}
+                  onAddressChange={setCustomerAddress}
+                  lat={latitude}
+                  lng={longitude}
+                  onCoordsChange={(la, lo) => {
+                    setLatitude(la);
+                    setLongitude(lo);
+                  }}
+                  error={err("customerAddress")}
+                  searchArea={searchArea}
+                />
+              </Field>
+            ) : (
+              <div className="sm:col-span-2 rounded-md border border-dashed bg-muted/30 p-3 text-sm text-muted-foreground">
+                Retiro en el local — no se requiere dirección de entrega.
+              </div>
+            )}
             <Field label="Observaciones del cliente" className="sm:col-span-2">
               <Textarea
                 value={customerNotes}
@@ -242,6 +306,34 @@ export function OrderForm({ brothTypes, slots, defaultDate, initial, searchArea 
             <CardTitle>Entrega</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
+            <Field label="Tipo de entrega" required>
+              <Select
+                value={fulfillmentType}
+                onValueChange={(v) => setFulfillmentType(v as FulfillmentType)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="delivery">Envío a domicilio</SelectItem>
+                  <SelectItem value="pickup">Retiro en el local</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Forma de pago" error={err("paymentMethodId")} required>
+              <Select value={paymentMethodId} onValueChange={setPaymentMethodId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccione forma de pago" />
+                </SelectTrigger>
+                <SelectContent>
+                  {paymentMethods.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
             <Field label="Fecha de entrega" error={err("deliveryDate")} required>
               <Input
                 type="date"
@@ -263,6 +355,22 @@ export function OrderForm({ brothTypes, slots, defaultDate, initial, searchArea 
                 </SelectContent>
               </Select>
             </Field>
+            {!isPickup && (
+              <Field label="Forma de envío" error={err("shippingMethodId")} className="sm:col-span-2">
+                <Select value={shippingMethodId} onValueChange={setShippingMethodId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione cómo se envía" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {shippingMethods.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
             {isEdit && (
               <Field label="Estado" className="sm:col-span-2">
                 <Select value={status} onValueChange={(v) => setStatus(v as OrderStatus)}>
@@ -279,6 +387,20 @@ export function OrderForm({ brothTypes, slots, defaultDate, initial, searchArea 
                 </Select>
               </Field>
             )}
+            {!isPickup && (
+              <Field
+                label="Link de seguimiento"
+                error={err("trackingUrl")}
+                className="sm:col-span-2"
+              >
+                <Input
+                  value={trackingUrl}
+                  onChange={(e) => setTrackingUrl(e.target.value)}
+                  placeholder="https://maps.app.goo.gl/…  (opcional, para el mensaje «En reparto»)"
+                  inputMode="url"
+                />
+              </Field>
+            )}
           </CardContent>
         </Card>
 
@@ -287,20 +409,25 @@ export function OrderForm({ brothTypes, slots, defaultDate, initial, searchArea 
             <CardTitle>Tazones</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {brothTypes.length === 0 && (
+            {products.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                No hay tipos de caldo activos. Configúrelos en Configuración.
+                No hay productos activos. Configúrelos en Configuración.
               </p>
             )}
-            {brothTypes.map((b) => (
+            {products.map((p) => (
               <div
-                key={b.id}
+                key={p.id}
                 className="flex items-center justify-between rounded-lg border p-3"
               >
-                <span className="font-medium">{b.name}</span>
+                <div>
+                  <span className="font-medium">{p.name}</span>
+                  <span className="ml-2 text-sm text-muted-foreground tabular-nums">
+                    {formatArs(p.priceCents)}
+                  </span>
+                </div>
                 <Stepper
-                  value={quantities[b.id] ?? 0}
-                  onChange={(v) => setQty(b.id, v)}
+                  value={quantities[p.id] ?? 0}
+                  onChange={(v) => setQty(p.id, v)}
                 />
               </div>
             ))}
@@ -319,8 +446,29 @@ export function OrderForm({ brothTypes, slots, defaultDate, initial, searchArea 
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="flex items-baseline justify-between">
-              <span className="text-sm text-muted-foreground">Total del pedido</span>
+              <span className="text-sm text-muted-foreground">Tazones</span>
               <span className="text-2xl font-bold tabular-nums">{totalBowls}</span>
+            </div>
+
+            <div className="space-y-1.5 border-y py-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span className="tabular-nums">{formatArs(pricing.subtotalCents)}</span>
+              </div>
+              {pricing.discountCents > 0 && (
+                <div className="flex items-center justify-between text-success">
+                  <span>Descuento por cantidad</span>
+                  <span className="tabular-nums">
+                    −{formatArs(pricing.discountCents)}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-baseline justify-between pt-1">
+                <span className="font-medium">Total</span>
+                <span className="text-xl font-bold tabular-nums">
+                  {formatArs(pricing.totalCents)}
+                </span>
+              </div>
             </div>
             {preview ? (
               <>
