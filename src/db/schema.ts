@@ -68,6 +68,9 @@ export const products = pgTable(
     category: text("category").notNull().default("Ramen"),
     // Sale price in Argentine peso centavos (integer minor units; ARS only).
     priceCents: integer("price_cents").notNull().default(0),
+    // Unit cost to produce this product (ARS centavos). Manual for now; later
+    // derived from the recipe/BOM. Frozen onto order_items at sale time.
+    costCents: integer("cost_cents").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),
     ...timestamps,
@@ -196,6 +199,15 @@ export const orders = pgTable(
       .references(() => deliverySlots.id, { onDelete: "restrict" }),
     status: orderStatusEnum("status").notNull().default("pending"),
     totalBowls: integer("total_bowls").notNull().default(0),
+    // ── Frozen financial snapshot (set at sale time; never recompute history) ──
+    subtotalCents: integer("subtotal_cents").notNull().default(0),
+    discountCents: integer("discount_cents").notNull().default(0),
+    totalCents: integer("total_cents").notNull().default(0),
+    goodsCostCents: integer("goods_cost_cents").notNull().default(0),
+    // When the customer paid (revenue is recognized on this date) + when the
+    // snapshot was frozen (null = legacy/approximate backfill).
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    pricedAt: timestamp("priced_at", { withTimezone: true }),
     exceededSlotCapacity: boolean("exceeded_slot_capacity").notNull().default(false),
     exceededDailyCapacity: boolean("exceeded_daily_capacity").notNull().default(false),
     overCapacityApproved: boolean("over_capacity_approved").notNull().default(false),
@@ -225,11 +237,172 @@ export const orderItems = pgTable(
       .notNull()
       .references(() => products.id, { onDelete: "restrict" }),
     quantity: integer("quantity").notNull().default(1),
+    // Frozen at sale time (price/cost/category can change later).
+    unitPriceCents: integer("unit_price_cents").notNull().default(0),
+    unitCostCents: integer("unit_cost_cents").notNull().default(0),
+    lineCategory: text("line_category"),
     ...timestamps,
   },
   (t) => ({
     orderIdx: index("order_items_order_idx").on(t.orderId),
     productIdx: index("order_items_product_idx").on(t.productId),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────
+// expenses — operating expenses NOT captured as product cost
+// (fijos, sueldos, variables en lote). Raw materials that feed
+// inventory go through `purchases`, not here (avoids double counting).
+// ─────────────────────────────────────────────────────────────
+export const expenseKindEnum = pgEnum("expense_kind", ["fixed", "variable"]);
+
+export const expenses = pgTable(
+  "expenses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    expenseDate: date("expense_date").notNull(),
+    amountCents: integer("amount_cents").notNull().default(0),
+    category: text("category").notNull(),
+    kind: expenseKindEnum("kind").notNull().default("variable"),
+    vendor: text("vendor"),
+    notes: text("notes"),
+    receiptPath: text("receipt_path"),
+    ...timestamps,
+  },
+  (t) => ({
+    dateIdx: index("expenses_date_idx").on(t.expenseDate),
+    categoryIdx: index("expenses_category_idx").on(t.category),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────
+// ingredients — inventory items (insumos). Stock + weighted-average
+// cost (WAC) are cached here in BASE units (integer: g | ml | unit).
+// ─────────────────────────────────────────────────────────────
+export const baseUnitEnum = pgEnum("base_unit", ["g", "ml", "unit"]);
+
+export const ingredients = pgTable(
+  "ingredients",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    baseUnit: baseUnitEnum("base_unit").notNull().default("g"),
+    // How a purchase unit converts to base units (e.g. 1 kg = 1000 g).
+    purchaseUnitLabel: text("purchase_unit_label").notNull().default(""),
+    purchaseToBase: integer("purchase_to_base").notNull().default(1),
+    // Weighted-average cost in centavos per BASE unit (cache).
+    avgCostCents: integer("avg_cost_cents").notNull().default(0),
+    // Current stock in base units (cache; ledger is stock_movements).
+    stockBase: integer("stock_base").notNull().default(0),
+    minStockBase: integer("min_stock_base").notNull().default(0),
+    isActive: boolean("is_active").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => ({
+    nameIdx: uniqueIndex("ingredients_name_idx").on(t.name),
+    sortIdx: index("ingredients_sort_idx").on(t.sortOrder),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────
+// recipe_items — BOM: how much of each ingredient a product consumes
+// (in base units, per product unit). Packaging = ingredient unit='unit'.
+// ─────────────────────────────────────────────────────────────
+export const recipeItems = pgTable(
+  "recipe_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    ingredientId: uuid("ingredient_id")
+      .notNull()
+      .references(() => ingredients.id, { onDelete: "restrict" }),
+    qtyPerUnitBase: integer("qty_per_unit_base").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => ({
+    productIdx: index("recipe_items_product_idx").on(t.productId),
+    uniqProductIngredient: uniqueIndex("recipe_items_product_ingredient_idx").on(
+      t.productId,
+      t.ingredientId,
+    ),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────
+// stock_movements — append-only ledger of every inventory change.
+// ─────────────────────────────────────────────────────────────
+export const stockMovementKindEnum = pgEnum("stock_movement_kind", [
+  "purchase",
+  "consumption",
+  "consumption_reversal",
+  "waste",
+  "adjustment",
+]);
+
+export const stockMovements = pgTable(
+  "stock_movements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ingredientId: uuid("ingredient_id")
+      .notNull()
+      .references(() => ingredients.id, { onDelete: "restrict" }),
+    // Signed quantity in base units (+ entrada, − salida).
+    qtyBase: integer("qty_base").notNull(),
+    kind: stockMovementKindEnum("kind").notNull(),
+    // WAC per base unit frozen at the moment of the movement.
+    unitCostCents: integer("unit_cost_cents").notNull().default(0),
+    // What caused it (e.g. "orders" / orderId, "purchases" / purchaseId).
+    refTable: text("ref_table"),
+    refId: uuid("ref_id"),
+    reason: text("reason"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+    ...timestamps,
+  },
+  (t) => ({
+    ingredientIdx: index("stock_movements_ingredient_idx").on(t.ingredientId),
+    refIdx: index("stock_movements_ref_idx").on(t.refTable, t.refId),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────
+// purchases — buying inventory (cash-out + asset, NOT a P&L expense).
+// Feeds stock + recomputes WAC.
+// ─────────────────────────────────────────────────────────────
+export const purchases = pgTable(
+  "purchases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    purchaseDate: date("purchase_date").notNull(),
+    vendor: text("vendor"),
+    notes: text("notes"),
+    totalCents: integer("total_cents").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => ({
+    dateIdx: index("purchases_date_idx").on(t.purchaseDate),
+  }),
+);
+
+export const purchaseItems = pgTable(
+  "purchase_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    purchaseId: uuid("purchase_id")
+      .notNull()
+      .references(() => purchases.id, { onDelete: "cascade" }),
+    ingredientId: uuid("ingredient_id")
+      .notNull()
+      .references(() => ingredients.id, { onDelete: "restrict" }),
+    qtyBase: integer("qty_base").notNull().default(0),
+    // Cost per base unit paid in THIS purchase (centavos).
+    unitCostCents: integer("unit_cost_cents").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => ({
+    purchaseIdx: index("purchase_items_purchase_idx").on(t.purchaseId),
   }),
 );
 
@@ -325,6 +498,38 @@ export const deliverySlotsRelations = relations(deliverySlots, ({ many }) => ({
 
 export const productsRelations = relations(products, ({ many }) => ({
   orderItems: many(orderItems),
+  recipe: many(recipeItems),
+}));
+
+export const recipeItemsRelations = relations(recipeItems, ({ one }) => ({
+  product: one(products, {
+    fields: [recipeItems.productId],
+    references: [products.id],
+  }),
+  ingredient: one(ingredients, {
+    fields: [recipeItems.ingredientId],
+    references: [ingredients.id],
+  }),
+}));
+
+export const ingredientsRelations = relations(ingredients, ({ many }) => ({
+  recipeItems: many(recipeItems),
+  movements: many(stockMovements),
+}));
+
+export const purchasesRelations = relations(purchases, ({ many }) => ({
+  items: many(purchaseItems),
+}));
+
+export const purchaseItemsRelations = relations(purchaseItems, ({ one }) => ({
+  purchase: one(purchases, {
+    fields: [purchaseItems.purchaseId],
+    references: [purchases.id],
+  }),
+  ingredient: one(ingredients, {
+    fields: [purchaseItems.ingredientId],
+    references: [ingredients.id],
+  }),
 }));
 
 // ─────────────────────────────────────────────────────────────
@@ -349,6 +554,15 @@ export type MessageTemplate = typeof messageTemplates.$inferSelect;
 export type NewMessageTemplate = typeof messageTemplates.$inferInsert;
 export type DeliveryRun = typeof deliveryRuns.$inferSelect;
 export type NewDeliveryRun = typeof deliveryRuns.$inferInsert;
+export type Expense = typeof expenses.$inferSelect;
+export type NewExpense = typeof expenses.$inferInsert;
+export type Ingredient = typeof ingredients.$inferSelect;
+export type NewIngredient = typeof ingredients.$inferInsert;
+export type RecipeItem = typeof recipeItems.$inferSelect;
+export type NewRecipeItem = typeof recipeItems.$inferInsert;
+export type StockMovement = typeof stockMovements.$inferSelect;
+export type Purchase = typeof purchases.$inferSelect;
+export type PurchaseItem = typeof purchaseItems.$inferSelect;
 
 // Settings keys (typed constants)
 export const SETTING_KEYS = {

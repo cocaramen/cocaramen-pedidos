@@ -111,6 +111,7 @@ export function ProductsManager({ products }: Props) {
               <TableHead>Nombre</TableHead>
               <TableHead>Categoría</TableHead>
               <TableHead className="w-32 text-right">Precio</TableHead>
+              <TableHead className="w-32 text-right">Costo</TableHead>
               <TableHead className="w-24 text-center">Orden</TableHead>
               <TableHead className="w-24 text-center">Activo</TableHead>
               <TableHead className="w-20 text-right">Acciones</TableHead>
@@ -120,7 +121,7 @@ export function ProductsManager({ products }: Props) {
             {sorted.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={7}
                   className="text-center text-sm text-muted-foreground"
                 >
                   No hay productos. Cree el primero.
@@ -145,6 +146,9 @@ export function ProductsManager({ products }: Props) {
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {formatArs(product.priceCents)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums text-muted-foreground">
+                  {formatArs(product.costCents)}
                 </TableCell>
                 <TableCell className="text-center tabular-nums">
                   {product.sortOrder}
@@ -196,6 +200,7 @@ function ProductDialog({
   const [name, setName] = useState(product?.name ?? "");
   const [category, setCategory] = useState(product?.category ?? "Ramen");
   const [price, setPrice] = useState(centsToPesosInput(product?.priceCents ?? 0));
+  const [cost, setCost] = useState(centsToPesosInput(product?.costCents ?? 0));
   const [sortOrder, setSortOrder] = useState(String(product?.sortOrder ?? 0));
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
 
@@ -203,6 +208,7 @@ function ProductDialog({
     setName(product?.name ?? "");
     setCategory(product?.category ?? "Ramen");
     setPrice(centsToPesosInput(product?.priceCents ?? 0));
+    setCost(centsToPesosInput(product?.costCents ?? 0));
     setSortOrder(String(product?.sortOrder ?? 0));
     setFieldErrors({});
   }
@@ -220,6 +226,7 @@ function ProductDialog({
       setFieldErrors({ priceCents: ["Ingrese un precio válido en pesos."] });
       return;
     }
+    const costCents = pesosToCents(cost) ?? 0;
     startTransition(async () => {
       const result =
         mode === "create"
@@ -227,6 +234,7 @@ function ProductDialog({
               name,
               category,
               priceCents,
+              costCents,
               isActive: true,
               sortOrder: Number(sortOrder),
             })
@@ -234,6 +242,7 @@ function ProductDialog({
               name,
               category,
               priceCents,
+              costCents,
               sortOrder: Number(sortOrder),
             });
 
@@ -322,6 +331,28 @@ function ProductDialog({
                 <p className="text-sm font-medium text-destructive">
                   {err("priceCents")}
                 </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="product-cost">Costo (ARS)</Label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  $
+                </span>
+                <Input
+                  id="product-cost"
+                  inputMode="decimal"
+                  className="pl-7 tabular-nums"
+                  value={cost}
+                  onChange={(e) => setCost(e.target.value)}
+                  placeholder="6000"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Costo de producir una unidad (ingredientes + envase). Define el margen.
+              </p>
+              {err("costCents") && (
+                <p className="text-sm font-medium text-destructive">{err("costCents")}</p>
               )}
             </div>
             <div className="space-y-2">

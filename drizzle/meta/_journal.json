@@ -71,6 +71,20 @@
       "when": 1782492416042,
       "tag": "0009_big_devos",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782513477763,
+      "tag": "0010_minor_dragon_lord",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1782514144343,
+      "tag": "0011_breezy_hobgoblin",
+      "breakpoints": true
     }
   ]
 }

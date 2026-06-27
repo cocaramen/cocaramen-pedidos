@@ -161,6 +161,13 @@ export const productSchema = z.object({
     .min(0, "El precio no puede ser negativo.")
     .max(1_000_000_00, "Precio demasiado alto.")
     .default(0),
+  // Unit cost to produce (ARS centavos). Manual for now; recipes later.
+  costCents: z.coerce
+    .number()
+    .int("El costo debe ser un monto válido.")
+    .min(0, "El costo no puede ser negativo.")
+    .max(1_000_000_00, "Costo demasiado alto.")
+    .default(0),
   isActive: z.coerce.boolean().default(true),
   sortOrder: z.coerce.number().int().min(0).default(0),
 });
@@ -229,6 +236,55 @@ export const receiptImageSchema = z.object({
     .trim()
     .regex(/^data:image\/(png|jpeg|webp);base64,/, "Imagen inválida.")
     .max(1_500_000, "La imagen es demasiado grande."),
+});
+
+// ── Finanzas / Gastos / Inventario ─────────────────────────────
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (YYYY-MM-DD).");
+
+export const expenseSchema = z.object({
+  expenseDate: isoDate,
+  amountCents: z.coerce.number().int().min(1, "El monto debe ser mayor a 0.").max(1_000_000_00),
+  category: z.string().trim().min(1, "La categoría es obligatoria.").max(60),
+  kind: z.enum(["fixed", "variable"]).default("variable"),
+  vendor: z.string().trim().max(120).optional().or(z.literal("")),
+  notes: z.string().trim().max(1000).optional().or(z.literal("")),
+});
+
+export const ingredientSchema = z.object({
+  name: z.string().trim().min(1, "El nombre es obligatorio.").max(120),
+  baseUnit: z.enum(["g", "ml", "unit"]).default("g"),
+  purchaseUnitLabel: z.string().trim().min(1, "Indicá la unidad de compra.").max(30),
+  purchaseToBase: z.coerce.number().int().min(1, "Debe ser ≥ 1.").max(1_000_000),
+  minStockBase: z.coerce.number().int().min(0).default(0),
+  isActive: z.coerce.boolean().default(true),
+  sortOrder: z.coerce.number().int().min(0).default(0),
+});
+
+export const recipeItemSchema = z.object({
+  productId: z.string().uuid(),
+  ingredientId: z.string().uuid("Insumo inválido."),
+  qtyPerUnitBase: z.coerce.number().int().min(1, "La cantidad debe ser mayor a 0.").max(10_000_000),
+});
+
+export const purchaseSchema = z.object({
+  purchaseDate: isoDate,
+  vendor: z.string().trim().max(120).optional().or(z.literal("")),
+  notes: z.string().trim().max(1000).optional().or(z.literal("")),
+  items: z
+    .array(
+      z.object({
+        ingredientId: z.string().uuid("Insumo inválido."),
+        qtyBase: z.coerce.number().int().min(1, "Cantidad inválida.").max(100_000_000),
+        unitCostCents: z.coerce.number().int().min(0).max(1_000_000_00),
+      }),
+    )
+    .min(1, "Agregá al menos un insumo."),
+});
+
+export const stockAdjustmentSchema = z.object({
+  ingredientId: z.string().uuid(),
+  countedBase: z.coerce.number().int().min(0).max(100_000_000),
+  reason: z.string().trim().max(200).optional().or(z.literal("")),
 });
 
 export const messageTemplateSchema = z.object({

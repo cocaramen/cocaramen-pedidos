@@ -12,10 +12,24 @@ import {
   uploadPrivateImage,
   removeFromBucket,
   parseDataUri,
+  signedUrl,
 } from "@/lib/supabase/storage";
 
 const RECEIPT_BUCKET = "comprobantes";
 const isDataUri = (s: string) => s.startsWith("data:");
+
+/**
+ * Resolve a viewable URL for an order's receipt ON DEMAND (data URI as-is, or a
+ * fresh signed URL for private Storage). Kept off the page-render path so a slow
+ * Storage call never blocks loading the order.
+ */
+export async function getReceiptUrl(orderId: string): Promise<string | null> {
+  await requireUser();
+  const order = await db.query.orders.findFirst({ where: eq(orders.id, orderId) });
+  const ref = order?.transferReceiptPath;
+  if (!ref) return null;
+  return isDataUri(ref) ? ref : await signedUrl(RECEIPT_BUCKET, ref);
+}
 
 /** Attach (or replace) a transfer-payment receipt on an order. Admin only. */
 export async function uploadTransferReceipt(

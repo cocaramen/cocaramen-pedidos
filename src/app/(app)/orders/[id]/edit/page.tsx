@@ -10,12 +10,12 @@ import {
   getMessageTemplates,
 } from "@/server/queries";
 import { getSettings, getBranding } from "@/server/settings";
-import { signedUrl } from "@/lib/supabase/storage";
 import { nextDeliveryDate } from "@/lib/dates";
 import { buildOrderVars } from "@/lib/messages";
 import { OrderForm, type OrderFormInitial } from "@/components/orders/order-form";
 import { OrderMessagePanel } from "@/components/orders/order-message-panel";
 import { ReceiptUpload } from "@/components/orders/receipt-upload";
+import { OrderPaymentStatus } from "@/components/orders/order-payment-status";
 import { PageHeader } from "@/components/page-header";
 import { DeleteOrderButton } from "@/components/orders/delete-order-button";
 import type { Product, DeliverySlot } from "@/db/schema";
@@ -93,15 +93,10 @@ export default async function EditOrderPage({
   });
 
   // Receipt upload is shown only for payment methods that require a receipt
-  // (e.g. transfer). Resolve a viewable URL (signed URL for private Storage,
-  // or the inline data URI fallback).
+  // (e.g. transfer). The viewable URL is resolved ON DEMAND in the client
+  // component — never during render, so a slow Storage call can't block the page.
   const showReceipt = Boolean(order.paymentMethod?.requiresReceipt);
-  let receiptUrl: string | null = null;
-  if (showReceipt && order.transferReceiptPath) {
-    receiptUrl = order.transferReceiptPath.startsWith("data:")
-      ? order.transferReceiptPath
-      : await signedUrl("comprobantes", order.transferReceiptPath);
-  }
+  const hasReceipt = Boolean(order.transferReceiptPath);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -126,7 +121,12 @@ export default async function EditOrderPage({
           label: settings.searchLabel,
         }}
       />
-      {showReceipt && <ReceiptUpload orderId={order.id} receiptUrl={receiptUrl} />}
+      <OrderPaymentStatus
+        orderId={order.id}
+        totalCents={order.totalCents}
+        paidAtISO={order.paidAt ? order.paidAt.toISOString() : null}
+      />
+      {showReceipt && <ReceiptUpload orderId={order.id} hasReceipt={hasReceipt} />}
       <OrderMessagePanel
         templates={templates}
         vars={messageVars}

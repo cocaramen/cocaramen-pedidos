@@ -3,13 +3,25 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, ClipboardList, PlusCircle, Settings, Route } from "lucide-react";
+import {
+  LayoutDashboard,
+  ClipboardList,
+  PlusCircle,
+  Settings,
+  Route,
+  TrendingUp,
+  Wallet,
+  Boxes,
+} from "lucide-react";
 
 const ITEMS = [
   { href: "/", label: "Panel", icon: LayoutDashboard, exact: true },
   { href: "/orders", label: "Pedidos", icon: ClipboardList, exact: false },
   { href: "/orders/new", label: "Nuevo Pedido", icon: PlusCircle, exact: true },
   { href: "/routes", label: "Ruta de reparto", icon: Route, exact: true },
+  { href: "/finanzas", label: "Finanzas", icon: TrendingUp, exact: true },
+  { href: "/gastos", label: "Gastos", icon: Wallet, exact: false },
+  { href: "/inventario", label: "Inventario", icon: Boxes, exact: false },
   { href: "/settings", label: "Configuración", icon: Settings, exact: false },
 ];
 

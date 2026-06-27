@@ -8,11 +8,14 @@ import {
   products,
   paymentMethods,
   shippingMethods,
+  volumeDiscounts,
 } from "@/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { createOrderSchema, updateOrderSchema, type OrderInput } from "@/lib/validation";
 import { evaluateCapacity, sumBowls } from "@/lib/capacity";
+import { computeOrderSnapshot, type CostingItem } from "@/lib/costing";
+import { applyInventoryForStatusChange } from "@/server/inventory-service";
 import { buildCapacitySnapshot } from "@/server/capacity-service";
 import { canTransition, isValidStatus } from "@/lib/order-status";
 import { type ActionResult, ok, fail } from "@/lib/action-result";
@@ -50,6 +53,51 @@ async function validateReferences(data: OrderInput): Promise<string | null> {
     return "La forma de envío no existe.";
   }
   return null;
+}
+
+/**
+ * Compute the frozen financial snapshot (totals + COGS) for a set of items,
+ * and return the product map so per-line price/cost/category can be frozen too.
+ */
+async function buildOrderSnapshot(items: { productId: string; quantity: number }[]) {
+  const ids = items.map((i) => i.productId);
+  const [rows, tiers] = await Promise.all([
+    db.query.products.findMany({ where: inArray(products.id, ids) }),
+    db.query.volumeDiscounts.findMany({ where: eq(volumeDiscounts.isActive, true) }),
+  ]);
+  const productMap = new Map(rows.map((p) => [p.id, p]));
+  const costingItems: CostingItem[] = items
+    .filter((i) => productMap.has(i.productId))
+    .map((i) => {
+      const p = productMap.get(i.productId)!;
+      return {
+        product: { priceCents: p.priceCents, costCents: p.costCents, category: p.category },
+        quantity: i.quantity,
+      };
+    });
+  const snapshot = computeOrderSnapshot(
+    costingItems,
+    tiers.map((t) => ({
+      category: t.category,
+      minQuantity: t.minQuantity,
+      discountBps: t.discountBps,
+      isActive: t.isActive,
+    })),
+  );
+  return { snapshot, productMap };
+}
+
+/** Frozen per-line snapshot fields for an order item. */
+function lineSnapshot(
+  productMap: Map<string, { priceCents: number; costCents: number; category: string }>,
+  productId: string,
+) {
+  const p = productMap.get(productId);
+  return {
+    unitPriceCents: p?.priceCents ?? 0,
+    unitCostCents: p?.costCents ?? 0,
+    lineCategory: p?.category ?? null,
+  };
 }
 
 /** Pickup orders carry no address/coords/shipping method. */
@@ -100,6 +148,8 @@ export async function createOrder(input: unknown): Promise<ActionResult<{ id: st
     });
   }
 
+  const { snapshot: fin, productMap } = await buildOrderSnapshot(data.items);
+
   const newId = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(orders)
@@ -114,6 +164,11 @@ export async function createOrder(input: unknown): Promise<ActionResult<{ id: st
         deliverySlotId: data.deliverySlotId,
         status: (data.status as OrderStatus) ?? "pending",
         totalBowls,
+        subtotalCents: fin.subtotalCents,
+        discountCents: fin.discountCents,
+        totalCents: fin.totalCents,
+        goodsCostCents: fin.goodsCostCents,
+        pricedAt: new Date(),
         exceededSlotCapacity: evaluation.exceededSlotCapacity,
         exceededDailyCapacity: evaluation.exceededDailyCapacity,
         overCapacityApproved: evaluation.requiresApproval,
@@ -126,6 +181,7 @@ export async function createOrder(input: unknown): Promise<ActionResult<{ id: st
         orderId: created.id,
         productId: i.productId,
         quantity: i.quantity,
+        ...lineSnapshot(productMap, i.productId),
       })),
     );
     return created.id;
@@ -186,6 +242,8 @@ export async function updateOrder(
     );
   }
 
+  const { snapshot: fin, productMap } = await buildOrderSnapshot(data.items);
+
   await db.transaction(async (tx) => {
     await tx
       .update(orders)
@@ -200,6 +258,11 @@ export async function updateOrder(
         deliverySlotId: data.deliverySlotId,
         status: nextStatus,
         totalBowls,
+        subtotalCents: fin.subtotalCents,
+        discountCents: fin.discountCents,
+        totalCents: fin.totalCents,
+        goodsCostCents: fin.goodsCostCents,
+        pricedAt: existing.pricedAt ?? new Date(),
         exceededSlotCapacity: evaluation.exceededSlotCapacity,
         exceededDailyCapacity: evaluation.exceededDailyCapacity,
         overCapacityApproved: evaluation.requiresApproval,
@@ -216,9 +279,15 @@ export async function updateOrder(
         orderId: id,
         productId: i.productId,
         quantity: i.quantity,
+        ...lineSnapshot(productMap, i.productId),
       })),
     );
   });
+
+  // Inventory side-effect (deplete on delivered, reverse off it).
+  if (nextStatus !== existing.status) {
+    await applyInventoryForStatusChange(id, existing.status, nextStatus);
+  }
 
   revalidatePath("/");
   revalidatePath("/orders");
@@ -242,11 +311,27 @@ export async function updateOrderStatus(
   }
 
   await db.update(orders).set({ status }).where(eq(orders.id, id));
+  await applyInventoryForStatusChange(id, existing.status, status);
 
   revalidatePath("/");
   revalidatePath("/orders");
   revalidatePath(`/orders/${id}/edit`);
   return ok({ id });
+}
+
+/** Mark an order as paid / unpaid (revenue is recognized on the payment date). */
+export async function setOrderPaid(id: string, paid: boolean): Promise<ActionResult> {
+  await requireUser();
+  const existing = await db.query.orders.findFirst({ where: eq(orders.id, id) });
+  if (!existing) return fail("El pedido no existe.");
+  await db
+    .update(orders)
+    .set({ paidAt: paid ? (existing.paidAt ?? new Date()) : null })
+    .where(eq(orders.id, id));
+  revalidatePath("/");
+  revalidatePath("/orders");
+  revalidatePath(`/orders/${id}/edit`);
+  return ok(undefined);
 }
 
 export async function deleteOrder(id: string): Promise<ActionResult<{ id: string }>> {
@@ -269,6 +354,9 @@ export async function duplicateOrder(id: string): Promise<ActionResult<{ id: str
   });
   if (!source) return fail("El pedido no existe.");
 
+  const items = source.items.map((i) => ({ productId: i.productId, quantity: i.quantity }));
+  const { snapshot: fin, productMap } = await buildOrderSnapshot(items);
+
   const newId = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(orders)
@@ -288,18 +376,24 @@ export async function duplicateOrder(id: string): Promise<ActionResult<{ id: str
         deliverySlotId: source.deliverySlotId,
         status: "pending",
         totalBowls: source.totalBowls,
+        subtotalCents: fin.subtotalCents,
+        discountCents: fin.discountCents,
+        totalCents: fin.totalCents,
+        goodsCostCents: fin.goodsCostCents,
+        pricedAt: new Date(),
         exceededSlotCapacity: false,
         exceededDailyCapacity: false,
         overCapacityApproved: false,
       })
       .returning({ id: orders.id });
 
-    if (source.items.length) {
+    if (items.length) {
       await tx.insert(orderItems).values(
-        source.items.map((i) => ({
+        items.map((i) => ({
           orderId: created.id,
           productId: i.productId,
           quantity: i.quantity,
+          ...lineSnapshot(productMap, i.productId),
         })),
       );
     }

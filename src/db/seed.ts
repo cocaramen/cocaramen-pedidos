@@ -9,10 +9,10 @@ import { SETTING_KEYS } from "./schema";
 
 // priceCents = ARS centavos (e.g. 1200000 = $12.000). Set on insert only.
 const PRODUCTS = [
-  { name: "Caldo de Pollo", category: "Ramen", priceCents: 1200000, sortOrder: 1 },
-  { name: "Caldo de Pollo Picante", category: "Ramen", priceCents: 1200000, sortOrder: 2 },
-  { name: "Caldo de Carne", category: "Ramen", priceCents: 1300000, sortOrder: 3 },
-  { name: "Caldo de Carne Picante", category: "Ramen", priceCents: 1300000, sortOrder: 4 },
+  { name: "Caldo de Pollo", category: "Ramen", priceCents: 1200000, costCents: 500000, sortOrder: 1 },
+  { name: "Caldo de Pollo Picante", category: "Ramen", priceCents: 1200000, costCents: 520000, sortOrder: 2 },
+  { name: "Caldo de Carne", category: "Ramen", priceCents: 1300000, costCents: 600000, sortOrder: 3 },
+  { name: "Caldo de Carne Picante", category: "Ramen", priceCents: 1300000, costCents: 620000, sortOrder: 4 },
 ];
 
 // Volume discounts: "from N units of a category, X% off". discountBps = basis

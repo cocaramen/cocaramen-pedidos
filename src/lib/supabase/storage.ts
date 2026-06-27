@@ -63,15 +63,23 @@ export async function uploadPrivateImage(opts: {
   if (error) throw error;
 }
 
-/** Short-lived signed URL to view a private object (default 5 min). */
+/**
+ * Short-lived signed URL to view a private object (default 5 min). Hard-capped
+ * with a timeout so a stale keep-alive socket on a warm serverless instance can
+ * never hang the request (returns null instead of blocking up to 300s).
+ */
 export async function signedUrl(
   bucket: string,
   path: string,
   expiresSec = 300,
 ): Promise<string | null> {
+  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000));
   try {
-    const { data } = await admin().storage.from(bucket).createSignedUrl(path, expiresSec);
-    return data?.signedUrl ?? null;
+    const call = admin()
+      .storage.from(bucket)
+      .createSignedUrl(path, expiresSec)
+      .then((r) => r.data?.signedUrl ?? null);
+    return await Promise.race([call, timeout]);
   } catch {
     return null;
   }

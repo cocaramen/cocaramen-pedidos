@@ -3,9 +3,17 @@
 import { headers } from "next/headers";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { orders, orderItems, deliverySlots, products, paymentMethods } from "@/db/schema";
+import {
+  orders,
+  orderItems,
+  deliverySlots,
+  products,
+  paymentMethods,
+  volumeDiscounts,
+} from "@/db/schema";
 import { publicOrderSchema } from "@/lib/validation";
 import { sumBowls, evaluateCapacity } from "@/lib/capacity";
+import { computeOrderSnapshot } from "@/lib/costing";
 import { buildCapacitySnapshot } from "@/server/capacity-service";
 import { getSettings } from "@/server/settings";
 import { isActiveDeliveryDay } from "@/lib/dates";
@@ -66,6 +74,27 @@ export async function createPublicOrder(
   const isPickup = data.fulfillmentType === "pickup";
   const totalBowls = sumBowls(data.items);
 
+  // Frozen financial snapshot (same as the admin actions).
+  const tiers = await db.query.volumeDiscounts.findMany({
+    where: eq(volumeDiscounts.isActive, true),
+  });
+  const productMap = new Map(foundProducts.map((p) => [p.id, p]));
+  const fin = computeOrderSnapshot(
+    data.items.map((i) => {
+      const p = productMap.get(i.productId)!;
+      return {
+        product: { priceCents: p.priceCents, costCents: p.costCents, category: p.category },
+        quantity: i.quantity,
+      };
+    }),
+    tiers.map((t) => ({
+      category: t.category,
+      minQuantity: t.minQuantity,
+      discountBps: t.discountBps,
+      isActive: t.isActive,
+    })),
+  );
+
   // Capacity: the HARD ceiling blocks (cannot be saved). Exceeding only the
   // SOFT capacity is allowed but flags the order for operator verification.
   const snapshot = await buildCapacitySnapshot({
@@ -92,17 +121,28 @@ export async function createPublicOrder(
         deliverySlotId: data.deliverySlotId,
         status: "pending",
         totalBowls,
+        subtotalCents: fin.subtotalCents,
+        discountCents: fin.discountCents,
+        totalCents: fin.totalCents,
+        goodsCostCents: fin.goodsCostCents,
+        pricedAt: new Date(),
         exceededSlotCapacity: evaluation.exceededSlotCapacity,
         exceededDailyCapacity: evaluation.exceededDailyCapacity,
       })
       .returning({ id: orders.id, token: orders.publicToken });
 
     await tx.insert(orderItems).values(
-      data.items.map((i) => ({
-        orderId: created.id,
-        productId: i.productId,
-        quantity: i.quantity,
-      })),
+      data.items.map((i) => {
+        const p = productMap.get(i.productId);
+        return {
+          orderId: created.id,
+          productId: i.productId,
+          quantity: i.quantity,
+          unitPriceCents: p?.priceCents ?? 0,
+          unitCostCents: p?.costCents ?? 0,
+          lineCategory: p?.category ?? null,
+        };
+      }),
     );
     return created.token;
   });
