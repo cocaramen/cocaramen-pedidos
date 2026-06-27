@@ -17,25 +17,38 @@ export interface Branding {
  * getSettings() so the (potentially large) logo data URI is only loaded where
  * the brand is actually rendered. Falls back to the bundled defaults.
  */
+const DEFAULT_BRANDING: Branding = {
+  name: APP_NAME,
+  nameShort: APP_NAME_SHORT,
+  description: APP_DESCRIPTION,
+  logo: null,
+};
+
 export async function getBranding(): Promise<Branding> {
-  const rows = await db
-    .select()
-    .from(settings)
-    .where(
-      inArray(settings.key, [
-        SETTING_KEYS.BUSINESS_NAME,
-        SETTING_KEYS.BUSINESS_NAME_SHORT,
-        SETTING_KEYS.BUSINESS_DESCRIPTION,
-        SETTING_KEYS.BUSINESS_LOGO,
-      ]),
-    );
-  const map = new Map(rows.map((r) => [r.key, r.value]));
-  return {
-    name: map.get(SETTING_KEYS.BUSINESS_NAME)?.trim() || APP_NAME,
-    nameShort: map.get(SETTING_KEYS.BUSINESS_NAME_SHORT)?.trim() || APP_NAME_SHORT,
-    description: map.get(SETTING_KEYS.BUSINESS_DESCRIPTION)?.trim() || APP_DESCRIPTION,
-    logo: map.get(SETTING_KEYS.BUSINESS_LOGO)?.trim() || null,
-  };
+  // Runs at build time too (root layout generateMetadata → /_not-found). Never
+  // throw on a DB hiccup / no DB at build — fall back to the bundled defaults.
+  try {
+    const rows = await db
+      .select()
+      .from(settings)
+      .where(
+        inArray(settings.key, [
+          SETTING_KEYS.BUSINESS_NAME,
+          SETTING_KEYS.BUSINESS_NAME_SHORT,
+          SETTING_KEYS.BUSINESS_DESCRIPTION,
+          SETTING_KEYS.BUSINESS_LOGO,
+        ]),
+      );
+    const map = new Map(rows.map((r) => [r.key, r.value]));
+    return {
+      name: map.get(SETTING_KEYS.BUSINESS_NAME)?.trim() || APP_NAME,
+      nameShort: map.get(SETTING_KEYS.BUSINESS_NAME_SHORT)?.trim() || APP_NAME_SHORT,
+      description: map.get(SETTING_KEYS.BUSINESS_DESCRIPTION)?.trim() || APP_DESCRIPTION,
+      logo: map.get(SETTING_KEYS.BUSINESS_LOGO)?.trim() || null,
+    };
+  } catch {
+    return DEFAULT_BRANDING;
+  }
 }
 
 export interface AppSettings {
