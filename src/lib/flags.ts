@@ -1,10 +1,9 @@
 // Feature flags. Reads an env override when present, otherwise the default.
 //
-// RECEIPTS_ENABLED: módulo de comprobantes de transferencia (subida + vista en
-// el detalle del pedido). Lo dejamos OFF temporalmente para diagnosticar si es
-// la causa de la lentitud/cuelgue al reentrar a un pedido después de guardarlo.
-// Para reactivar: poner el default en true (o setear RECEIPTS_ENABLED=true en
-// las env de Vercel) y redeploy.
+// RECEIPTS_ENABLED: módulo de comprobantes de transferencia. Se descartó como
+// causa del cuelgue (seguía pasando con esto OFF), así que vuelve ON. La URL
+// firmada de Storage se resuelve on-demand en el cliente, fuera del render.
+// Para apagarlo: setear RECEIPTS_ENABLED=false en las env de Vercel.
 export const RECEIPTS_ENABLED = process.env.RECEIPTS_ENABLED
   ? process.env.RECEIPTS_ENABLED === "true"
-  : false;
+  : true;
