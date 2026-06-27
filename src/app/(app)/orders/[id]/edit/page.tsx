@@ -10,6 +10,7 @@ import {
   getMessageTemplates,
 } from "@/server/queries";
 import { getSettings, getBranding } from "@/server/settings";
+import { RECEIPTS_ENABLED } from "@/lib/flags";
 import { nextDeliveryDate } from "@/lib/dates";
 import { buildOrderVars } from "@/lib/messages";
 import { OrderForm, type OrderFormInitial } from "@/components/orders/order-form";
@@ -95,7 +96,7 @@ export default async function EditOrderPage({
   // Receipt upload is shown only for payment methods that require a receipt
   // (e.g. transfer). The viewable URL is resolved ON DEMAND in the client
   // component — never during render, so a slow Storage call can't block the page.
-  const showReceipt = Boolean(order.paymentMethod?.requiresReceipt);
+  const showReceipt = RECEIPTS_ENABLED && Boolean(order.paymentMethod?.requiresReceipt);
   const hasReceipt = Boolean(order.transferReceiptPath);
 
   return (
